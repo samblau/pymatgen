@@ -15,14 +15,13 @@ from pymatgen.core import Structure, Lattice, PeriodicSite, Molecule
 from pymatgen.core.structure import FunctionalGroups
 from pymatgen.util.coord import lattice_points_in_supercell
 from pymatgen.vis.structure_vtk import EL_COLORS
-from pymatgen.analysis.local_env import OpenBabelNN
 
 from monty.json import MSONable
 from monty.os.path import which
 from operator import itemgetter
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from scipy.spatial import KDTree
-
+from scipy.stats import describe
 
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
@@ -803,6 +802,94 @@ class StructureGraph(MSONable):
         if not keep_dot:
             os.remove(basename+".dot")
 
+    @property
+    def types_and_weights_of_connections(self):
+        """
+        Extract a dictionary summarizing the types and weights
+        of edges in the graph.
+
+        :return: A dictionary with keys specifying the
+        species involved in a connection in alphabetical order
+        (e.g. string 'Fe-O') and values which are a list of
+        weights for those connections (e.g. bond lengths).
+        """
+        def get_label(u, v):
+            u_label = self.structure[u].species_string
+            v_label = self.structure[v].species_string
+            return "-".join(sorted((u_label, v_label)))
+
+        types = defaultdict(list)
+        for u, v, d in self.graph.edges(data=True):
+            label = get_label(u, v)
+            types[label].append(d['weight'])
+
+        return dict(types)
+
+    @property
+    def weight_statistics(self):
+        """
+        Extract a statistical summary of edge weights present in
+        the graph.
+
+        :return: A dict with an 'all_weights' list, 'minimum',
+        'maximum', 'median', 'mean', 'std_dev'
+        """
+
+        all_weights = [d.get('weight', None) for u, v, d
+                       in self.graph.edges(data=True)]
+        stats = describe(all_weights, nan_policy='omit')
+
+        return {
+            'all_weights': all_weights,
+            'min': stats.minmax[0],
+            'max': stats.minmax[1],
+            'mean': stats.mean,
+            'variance': stats.variance
+        }
+
+    def types_of_coordination_environments(self, anonymous=False):
+        """
+        Extract information on the different co-ordination environments
+        present in the graph.
+
+        :param anonymous: if anonymous, will replace specie names
+        with A, B, C, etc.
+        :return: a list of co-ordination environments,
+        e.g. ['Mo-S(6)', 'S-Mo(3)']
+        """
+
+        motifs = set()
+        for idx, site in enumerate(self.structure):
+
+            centre_sp = site.species_string
+
+            connected_sites = self.get_connected_sites(idx)
+            connected_species = [connected_site.site.species_string
+                                 for connected_site in connected_sites]
+
+            labels = []
+            for sp in set(connected_species):
+                count = connected_species.count(sp)
+                labels.append((count, sp))
+
+            labels = sorted(labels, reverse=True)
+
+            if anonymous:
+                mapping = {centre_sp: 'A'}
+                available_letters = [chr(66+i) for i in range(25)]
+                for label in labels:
+                    sp = label[1]
+                    if sp not in mapping:
+                        mapping[sp] = available_letters.pop(0)
+                centre_sp = 'A'
+                labels = [(label[0], mapping[label[1]]) for label in labels]
+
+            labels = ["{}({})".format(label[1], label[0]) for label in labels]
+            motif = '{}-{}'.format(centre_sp, ','.join(labels))
+            motifs.add(motif)
+
+        return sorted(list(motifs))
+
     def as_dict(self):
         """
         As in :Class: `pymatgen.core.Structure` except
@@ -1307,6 +1394,12 @@ class StructureGraph(MSONable):
         return molecules
 
 
+class MolGraphSplitError(Exception):
+    # Raised when a molecule graph is failed to split into two disconnected
+    # subgraphs
+    pass
+
+
 class MoleculeGraph(MSONable):
     """
     This is a class for annotating a Molecule with
@@ -1734,7 +1827,7 @@ class MoleculeGraph(MSONable):
             original.break_edge(bond[0], bond[1], allow_reverse=allow_reverse)
 
         if nx.is_weakly_connected(original.graph):
-            raise RuntimeError("Cannot split molecule; \
+            raise MolGraphSplitError("Cannot split molecule; \
                                 MoleculeGraph is still connected.")
         else:
 
@@ -1837,13 +1930,24 @@ class MoleculeGraph(MSONable):
         # convert back to molecule graphs
         unique_mol_graphs = []
         for fragment in unique_fragments:
-            species = [fragment.node[ii]["specie"] for ii in fragment.nodes]
-            coords = [fragment.node[ii]["coords"] for ii in fragment.nodes]
+            mapping = {e: i for i, e in enumerate(sorted(fragment.nodes))}
+            remapped = nx.relabel_nodes(fragment, mapping)
+
+            species = nx.get_node_attributes(remapped, "specie")
+            coords = nx.get_node_attributes(remapped, "coords")
+
+            edges = []
+
+            for from_index, to_index, key in remapped.edges:
+                edge_props = fragment.get_edge_data(from_index, to_index, key=key)
+
+                edges.append((from_index, to_index, edge_props))
+
             unique_mol_graphs.append(build_MoleculeGraph(Molecule(species=species, 
                                                                   coords=coords, 
-                                                                  charge=self.molecule.charge), 
-                                                         strategy=OpenBabelNN, 
-                                                         reorder=False, 
+                                                                  charge=self.molecule.charge),
+                                                         edges=edges,
+                                                         reorder=False,
                                                          extend_structure=False))
         return unique_mol_graphs
 
@@ -2487,19 +2591,14 @@ class MoleculeGraph(MSONable):
         :param other: MoleculeGraph object to be compared.
         :return: bool
         """
-
-        self_undir = self.graph.to_undirected()
-        other_undir = other.graph.to_undirected()
-
-        nm = iso.categorical_node_match("specie", "ERROR")
-
-        isomorphic = nx.is_isomorphic(self_undir, other_undir, node_match=nm)
-
-        if isomorphic and self.molecule.composition != other.molecule.composition:
-            raise RuntimeError("Anomaly: graph is isomorphic, but species in"
-                               " molecules are different.")
-
-        return isomorphic
+        if self.molecule.composition != other.molecule.composition:
+            return False
+        else:
+            self_undir = self.graph.to_undirected()
+            other_undir = other.graph.to_undirected()
+            nm = iso.categorical_node_match("specie", "ERROR")
+            isomorphic = nx.is_isomorphic(self_undir, other_undir, node_match=nm)
+            return isomorphic
 
     def diff(self, other, strict=True):
         """
@@ -2577,7 +2676,8 @@ def build_MoleculeGraph(molecule, edges=None, strategy=None,
     General out-of-class constructor for MoleculeGraph.
 
     :param molecule: pymatgen.core.Molecule object.
-    :param edges: List of tuples representing nodes in the graph. Default None.
+    :param edges: List of tuples (from, to, properties) representing edges in
+            the graph. Default None.
     :param strat: an instance of a
             :Class: `pymatgen.analysis.local_env.NearNeighbors` object. Default
             None.
@@ -2604,8 +2704,26 @@ def build_MoleculeGraph(molecule, edges=None, strategy=None,
                              " pymatgen.analysis.local_env strategy.")
     else:
         mol_graph = MoleculeGraph.with_empty_graph(molecule)
-        for edge in edges:
-            mol_graph.add_edge(edge[0], edge[1])
+        for from_index, to_index, properties in edges:
+            if properties is not None:
+                if "weight" in properties.keys():
+                    weight = properties["weight"]
+                    del properties["weight"]
+                else:
+                    weight = None
+
+                if len(properties.items()) == 0:
+                    properties = None
+            else:
+                weight = None
+
+            nodes = mol_graph.graph.nodes
+            if not (from_index in nodes and to_index in nodes):
+                raise ValueError("Edges cannot be added if nodes are not"
+                                 " present in the graph. Please check your"
+                                 " indices.")
+            mol_graph.add_edge(from_index, to_index, weight=weight,
+                               edge_properties=properties)
 
     mol_graph.set_node_attributes()
     return mol_graph

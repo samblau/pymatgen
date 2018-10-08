@@ -590,7 +590,7 @@ class VoronoiNN(NearNeighbors):
             (default: 0).
         targets (Element or list of Elements): target element(s).
         cutoff (float): cutoff radius in Angstrom to look for near-neighbor
-            atoms. Defaults to 10.0.
+            atoms. Defaults to 13.0.
         allow_pathological (bool): whether to allow infinite vertices in
             determination of Voronoi coordination.
         weight (string) - Statistic used to weigh neighbors (see the statistics
@@ -600,7 +600,7 @@ class VoronoiNN(NearNeighbors):
             for faster performance
     """
 
-    def __init__(self, tol=0, targets=None, cutoff=10.0,
+    def __init__(self, tol=0, targets=None, cutoff=13.0,
                  allow_pathological=False, weight='solid_angle',
                  extra_nn_info=True, compute_adj_neighbors=True):
         super(VoronoiNN, self).__init__()
@@ -645,8 +645,12 @@ class VoronoiNN(NearNeighbors):
         center = structure[n]
 
         cutoff = self.cutoff
-        max_cutoff = np.linalg.norm(
-            structure.lattice.lengths_and_angles[0]) + 0.01  # diagonal of cell
+
+        # max cutoff is the longest diagonal of the cell + room for noise
+        corners = [[1, 1, 1], [-1, 1, 1], [1, -1, 1], [1, 1, -1]]
+        d_corners = [np.linalg.norm(structure.lattice.get_cartesian_coords(c))
+                     for c in corners]
+        max_cutoff = max(d_corners) + 0.01
 
         while True:
             try:
@@ -657,19 +661,27 @@ class VoronoiNN(NearNeighbors):
 
                 # Run the Voronoi tessellation
                 qvoronoi_input = [s.coords for s in neighbors]
+
                 voro = Voronoi(
                     qvoronoi_input)  # can give seg fault if cutoff is too small
+
+                # Extract data about the site in question
+                cell_info = self._extract_cell_info(
+                    structure, 0, neighbors, targets, voro,
+                    self.compute_adj_neighbors)
                 break
 
-            except RuntimeError:
+            except RuntimeError as e:
                 if cutoff >= max_cutoff:
-                    raise RuntimeError("Error in Voronoi neighbor finding; max "
-                                       "cutoff exceeded")
+                    if e.args and "vertex" in e.args[0]:
+                        # pass through the error raised by _extract_cell_info
+                        raise e
+                    else:
+                        raise RuntimeError("Error in Voronoi neighbor finding; "
+                                           "max cutoff exceeded")
                 cutoff = min(cutoff * 2, max_cutoff + 0.001)
+        return cell_info
 
-        # Extract data about the site in question
-        return self._extract_cell_info(structure, 0, neighbors, targets, voro,
-                                       self.compute_adj_neighbors)
 
     def get_all_voronoi_polyhedra(self, structure):
         """Get the Voronoi polyhedra for all site in a simulation cell
@@ -988,22 +1000,23 @@ class VoronoiNN_modified(VoronoiNN):
                                                  weight, extra_nn_info)
 
 
-class JMolNN(NearNeighbors):
+class JmolNN(NearNeighbors):
     """
     Determine near-neighbor sites and coordination number using an emulation
-    of JMol's default autoBond() algorithm. This version of the algorithm
+    of Jmol's default autoBond() algorithm. This version of the algorithm
     does not take into account any information regarding known charge
     states.
 
     Args:
         tol (float): tolerance parameter for bond determination
-            (default: 1E-3).
+            (default: 0.56).
         el_radius_updates: (dict) symbol->float to override default atomic 
             radii table values 
     """
 
-    def __init__(self, tol=1E-3, el_radius_updates=None):
+    def __init__(self, tol=0.56, min_bond_distance=0.4, el_radius_updates=None):
         self.tol = tol
+        self.min_bond_distance = min_bond_distance
 
         # Load elemental radii table
         bonds_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -1015,25 +1028,25 @@ class JMolNN(NearNeighbors):
         if el_radius_updates:
             self.el_radius.update(el_radius_updates)
 
-    def get_max_bond_distance(self, el1_sym, el2_sym, constant=0.56):
+    def get_max_bond_distance(self, el1_sym, el2_sym):
         """
-        Use JMol algorithm to determine bond length from atomic parameters
+        Use Jmol algorithm to determine bond length from atomic parameters
         Args:
             el1_sym: (str) symbol of atom 1
             el2_sym: (str) symbol of atom 2
-            constant: (float) factor to tune model
 
         Returns: (float) max bond length
 
         """
         return sqrt(
-            (self.el_radius[el1_sym] + self.el_radius[el2_sym] + constant) ** 2)
+            (self.el_radius[el1_sym] + self.el_radius[el2_sym] + self.tol) ** 2)
+
 
     def get_nn_info(self, structure, n):
         """
         Get all near-neighbor sites as well as the associated image locations
         and weights of the site with index n using the bond identification
-        algorithm underlying JMol.
+        algorithm underlying Jmol.
 
         Args:
             structure (Structure): input structure.
@@ -1061,7 +1074,7 @@ class JMolNN(NearNeighbors):
         siw = []
         for neighb, dist in structure.get_neighbors(site, max_rad):
             # Confirm neighbor based on bond length specific to atom pair
-            if dist <= bonds[(site.specie, neighb.specie)] + self.tol:
+            if dist <= (bonds[(site.specie, neighb.specie)]) and (dist > self.min_bond_distance):
                 weight = min_rad / dist
                 siw.append({'site': neighb,
                             'image': self._get_image(neighb.frac_coords),
