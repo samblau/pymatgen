@@ -1,7 +1,7 @@
 Change log
 ==========
 
-v2018.10.18
+v2018.11.6
 -----------
 * New bond fragmenter and bond dissociation analysis modules (@samblau)
 * Improvements to MoleculeGraph (@espottesmith)
