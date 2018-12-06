@@ -236,6 +236,18 @@
 
         <span class="c1"># Set up</span>
         <span class="n">ref_entries</span> <span class="o">=</span> <span class="p">[]</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">ref_entries</span> <span class="k">else</span> <span class="n">ref_entries</span>
+
+        <span class="c1"># Check if appropriate ref_entries are present if the slab is non-stoichiometric</span>
+        <span class="c1"># TODO: There should be a way to identify which specific species are</span>
+        <span class="c1"># non-stoichiometric relative to the others in systems with more than 2 species</span>
+        <span class="n">slab_comp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">composition</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
+        <span class="n">ucell_entry_comp</span> <span class="o">=</span> <span class="n">ucell_entry</span><span class="o">.</span><span class="n">composition</span><span class="o">.</span><span class="n">reduced_composition</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
+        <span class="n">slab_clean_comp</span> <span class="o">=</span> <span class="n">Composition</span><span class="p">({</span><span class="n">el</span><span class="p">:</span> <span class="n">slab_comp</span><span class="p">[</span><span class="n">el</span><span class="p">]</span> <span class="k">for</span> <span class="n">el</span> <span class="ow">in</span> <span class="n">ucell_entry_comp</span><span class="o">.</span><span class="n">keys</span><span class="p">()})</span>
+        <span class="k">if</span> <span class="n">slab_clean_comp</span><span class="o">.</span><span class="n">reduced_composition</span> <span class="o">!=</span> <span class="n">ucell_entry</span><span class="o">.</span><span class="n">composition</span><span class="o">.</span><span class="n">reduced_composition</span><span class="p">:</span>
+            <span class="n">list_els</span> <span class="o">=</span> <span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">composition</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">ref_entries</span><span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">([</span><span class="n">el</span> <span class="ow">in</span> <span class="n">list_els</span> <span class="k">for</span> <span class="n">el</span> <span class="ow">in</span> <span class="n">ucell_entry</span><span class="o">.</span><span class="n">composition</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span><span class="o">.</span><span class="n">keys</span><span class="p">()]):</span>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;Elemental references missing for the non-dopant species.&quot;</span><span class="p">)</span>
+
         <span class="n">gamma</span> <span class="o">=</span> <span class="p">(</span><span class="n">Symbol</span><span class="p">(</span><span class="s2">&quot;E_surf&quot;</span><span class="p">)</span> <span class="o">-</span> <span class="n">Symbol</span><span class="p">(</span><span class="s2">&quot;Ebulk&quot;</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">Symbol</span><span class="p">(</span><span class="s2">&quot;A&quot;</span><span class="p">))</span>
         <span class="n">ucell_comp</span> <span class="o">=</span> <span class="n">ucell_entry</span><span class="o">.</span><span class="n">composition</span>
         <span class="n">ucell_reduced_comp</span> <span class="o">=</span> <span class="n">ucell_comp</span><span class="o">.</span><span class="n">reduced_composition</span>
@@ -1354,12 +1366,9 @@
 
 <div class="viewcode-block" id="WorkFunctionAnalyzer"><a class="viewcode-back" href="../../../pymatgen.analysis.surface_analysis.html#pymatgen.analysis.surface_analysis.WorkFunctionAnalyzer">[docs]</a><span class="k">class</span> <span class="nc">WorkFunctionAnalyzer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    A class that post processes a task document of a vasp calculation (from</span>
-<span class="sd">        using drone.assimilate). Can calculate work function from the vasp</span>
-<span class="sd">        calculations and plot the potential along the c axis. This class</span>
-<span class="sd">        assumes that LVTOT=True (i.e. the LOCPOT file was generated) for a</span>
-<span class="sd">        slab calculation and it was insert into the task document along with</span>
-<span class="sd">        the other outputs.</span>
+<span class="sd">    A class used for calculating the work function</span>
+<span class="sd">        from a slab model and visualizing the behavior</span>
+<span class="sd">        of the local potential along the slab.</span>
 
 <span class="sd">    .. attribute:: efermi</span>
 

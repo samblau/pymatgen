@@ -321,6 +321,16 @@
 <span class="sd">        Average ionic radius for element in ang. The average is taken over all</span>
 <span class="sd">        oxidation states of the element for which data is present.</span>
 
+<span class="sd">    .. attribute:: average_cationic_radius</span>
+
+<span class="sd">        Average cationic radius for element in ang. The average is taken over all</span>
+<span class="sd">        positive oxidation states of the element for which data is present.</span>
+
+<span class="sd">    .. attribute:: average_anionic_radius</span>
+
+<span class="sd">        Average ionic radius for element in ang. The average is taken over all</span>
+<span class="sd">        negative oxidation states of the element for which data is present.</span>
+
 <span class="sd">    .. attribute:: ionic_radii</span>
 
 <span class="sd">        All ionic radii of the element as a dict of</span>
@@ -535,6 +545,36 @@
             <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">radii</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">radii</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="mi">0</span>
+
+    <span class="nd">@property</span>
+    <span class="nd">@unitized</span><span class="p">(</span><span class="s2">&quot;ang&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">average_cationic_radius</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Average cationic radius for element (with units). The average is</span>
+<span class="sd">        taken over all positive oxidation states of the element for which</span>
+<span class="sd">        data is present.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;Ionic radii&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">:</span>
+            <span class="n">radii</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;Ionic radii&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                     <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">radii</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">radii</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">radii</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mi">0</span>
+
+    <span class="nd">@property</span>
+    <span class="nd">@unitized</span><span class="p">(</span><span class="s2">&quot;ang&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">average_anionic_radius</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Average anionic radius for element (with units). The average is</span>
+<span class="sd">        taken over all negative oxidation states of the element for which</span>
+<span class="sd">        data is present.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;Ionic radii&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">:</span>
+            <span class="n">radii</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;Ionic radii&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                     <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">radii</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">radii</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">radii</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mi">0</span>
 
     <span class="nd">@property</span>
     <span class="nd">@unitized</span><span class="p">(</span><span class="s2">&quot;ang&quot;</span><span class="p">)</span>

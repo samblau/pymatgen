@@ -2,6 +2,12 @@ Change log
 ==========
 
 v2018.11.6
+----------
+* Ionic radius based CrystalNN (@computron)
+* InterfacialReactivity (@dbroberg)
+* Misc bug fixes
+
+v2018.10.18
 -----------
 
 * New bond fragmenter and bond dissociation analysis modules (@samblau)
