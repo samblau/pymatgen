@@ -36,6 +36,7 @@ class QChemDictSetTest(PymatgenTest):
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
                 'scf_algorithm': 'diis',
+                'xc_grid': '3',
                 'geom_opt_max_cycles': 200
             })
         self.assertEqual(test_DictSet.pcm, {})
@@ -64,6 +65,7 @@ class QChemDictSetTest(PymatgenTest):
                 'exchange': 'b3lyp',
                 'geom_opt_max_cycles': 200,
                 'scf_algorithm': 'diis',
+                'xc_grid': '3',
                 'solvent_method': 'pcm'
             })
         self.assertEqual(
@@ -94,7 +96,9 @@ class QChemDictSetTest(PymatgenTest):
                 'exchange': 'b3lyp',
                 'geom_opt_max_cycles': 200,
                 'scf_algorithm': 'diis',
-                'solvent_method': 'smd'
+                'xc_grid': '3',
+                'solvent_method': 'smd',
+                'ideriv': '1'
             })
         self.assertEqual(test_DictSet.smx, {'solvent': 'water'})
 
@@ -110,7 +114,8 @@ class QChemDictSetTest(PymatgenTest):
             'basis': '6-311++g*',
             'max_scf_cycles': 200,
             'method': 'wb97xd',
-            'scf_algorithm': 'gdm',
+            'scf_algorithm': 'diis_gdm',
+            'xc_grid': '3',
             'geom_opt_max_cycles': 200,
             'thresh': 14
         }
@@ -134,7 +139,8 @@ class QChemDictSetTest(PymatgenTest):
             'basis': '6-31g*',
             'max_scf_cycles': 200,
             'method': 'b3lyp',
-            'scf_algorithm': 'gdm',
+            'scf_algorithm': 'diis_gdm',
+            'xc_grid': '3',
             'geom_opt_max_cycles': 200,
             'thresh': 14
         }
@@ -173,7 +179,8 @@ class OptSetTest(PymatgenTest):
                 'basis': '6-311++g*',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
-                'scf_algorithm': 'gdm',
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
                 'geom_opt_max_cycles': 200
             })
         self.assertEqual(test_OptSet.pcm, {})
@@ -193,7 +200,8 @@ class OptSetTest(PymatgenTest):
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
                 'geom_opt_max_cycles': 200,
-                'scf_algorithm': 'gdm',
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
                 'solvent_method': 'pcm'
             })
         self.assertEqual(
@@ -219,8 +227,10 @@ class OptSetTest(PymatgenTest):
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
                 'geom_opt_max_cycles': 200,
-                'scf_algorithm': 'gdm',
-                'solvent_method': 'smd'
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
+                'solvent_method': 'smd',
+                'ideriv': '1'
             })
         self.assertEqual(test_OptSet.smx, {'solvent': 'water'})
         self.assertEqual(test_OptSet.molecule, test_molecule)
@@ -238,7 +248,8 @@ class SinglePointSetTest(PymatgenTest):
                 'basis': '6-311++g*',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
-                'scf_algorithm': 'gdm'
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3'
             })
         self.assertEqual(test_SPSet.pcm, {})
         self.assertEqual(test_SPSet.solvent, {})
@@ -256,7 +267,8 @@ class SinglePointSetTest(PymatgenTest):
                 'basis': '6-311++g*',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
-                'scf_algorithm': 'gdm',
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
                 'solvent_method': 'pcm'
             })
         self.assertEqual(
@@ -281,8 +293,10 @@ class SinglePointSetTest(PymatgenTest):
                 'basis': '6-311++g*',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
-                'scf_algorithm': 'gdm',
-                'solvent_method': 'smd'
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
+                'solvent_method': 'smd',
+                'ideriv': '1'
             })
         self.assertEqual(test_SPSet.smx, {'solvent': 'water'})
         self.assertEqual(test_SPSet.molecule, test_molecule)
@@ -300,7 +314,8 @@ class FreqSetTest(PymatgenTest):
                 'basis': '6-311++g*',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
-                'scf_algorithm': 'gdm'
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3'
             })
         self.assertEqual(test_FreqSet.pcm, {})
         self.assertEqual(test_FreqSet.solvent, {})
@@ -317,7 +332,8 @@ class FreqSetTest(PymatgenTest):
                 'basis': '6-311++g*',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
-                'scf_algorithm': 'gdm',
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
                 'solvent_method': 'pcm'
             })
         self.assertEqual(
@@ -342,8 +358,10 @@ class FreqSetTest(PymatgenTest):
                 'basis': '6-311++g*',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
-                'scf_algorithm': 'gdm',
-                'solvent_method': 'smd'
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
+                'solvent_method': 'smd',
+                'ideriv': '1'
             })
         self.assertEqual(test_FreqSet.smx, {'solvent': 'water'})
         self.assertEqual(test_FreqSet.molecule, test_molecule)

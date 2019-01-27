@@ -7,6 +7,7 @@ import logging
 import os
 import numpy as np
 import math
+import copy
 
 from monty.io import zopen
 from monty.json import jsanitize
@@ -69,7 +70,11 @@ class QCOutput(MSONable):
         # Parse the molecular details: charge, multiplicity,
         # species, and initial geometry.
         self._read_charge_and_multiplicity()
-        if self.data.get('charge') is not None:
+        if read_pattern(
+                self.text, {
+                    "key": r"Nuclear Repulsion Energy"
+                },
+                terminate_on_match=True).get('key') == [[]]:
             self._read_species_and_inital_geometry()
 
         # Check if calculation finished
@@ -129,6 +134,9 @@ class QCOutput(MSONable):
         # Parse the Mulliken charges
         self._read_mulliken()
 
+        # Check for various warnings
+        self._detect_general_warnings()
+
         # Check to see if PCM or SMD are present
         self.data["solvent_method"] = None
         self.data["solvent_data"] = None
@@ -156,6 +164,15 @@ class QCOutput(MSONable):
             self.data["solvent_data"]["PCM_dielectric"] = float(temp_dielectric[0][0])
             self._read_pcm_information()
         elif self.data["solvent_method"] == "SMD":
+            if read_pattern(
+                self.text, {
+                    "key": r"Unrecognized solvent"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+                if not self.data.get('completion',[]):
+                    self.data["errors"] += ["unrecognized_solvent"]
+                else:
+                    self.data["warnings"]["unrecognized_solvent"] = True
             self.data["solvent_data"] = {}
             temp_solvent = read_pattern(
                 self.text, {
@@ -163,9 +180,11 @@ class QCOutput(MSONable):
                 }).get('key')
             for val in temp_solvent:
                 if val[0] != temp_solvent[0][0]:
-                    raise ValueError(
-                        "SMD should never find two different solvents!"
-                    )
+                    if val[0] != "for":
+                        self.data["warnings"]["SMD_two_solvents"] = str(temp_solvent[0][0]) + " and " + str(val[0])
+                    else:
+                        if "unrecognized_solvent" not in self.data["errors"] and "unrecognized_solvent" not in self.data["warnings"]:
+                            self.data["warnings"]["questionable_SMD_parsing"] = True
             self.data["solvent_data"]["SMD_solvent"] = temp_solvent[0][0]
             self._read_smd_information()
 
@@ -178,6 +197,27 @@ class QCOutput(MSONable):
             self.data["final_energy"] = None
         else:
             self.data["final_energy"] = float(temp_final_energy[0][0])
+
+        # Check if calculation is using dft_d and parse relevant info if so
+        self.data["using_dft_d3"] = read_pattern(
+            self.text, {
+                "key":
+                r"dft_d\s*= d3"
+            },
+            terminate_on_match=True).get('key')
+        if self.data.get('using_dft_d3', []):
+            temp_d3 = read_pattern(self.text, {
+                "key": r"\-D3 energy without 3body term =\s*([\d\.\-]+) hartrees"
+            }).get('key')
+            real_d3 = np.zeros(len(temp_d3))
+            if temp_d3 == None:
+                self.data["dft_d3"] = None
+            elif len(temp_d3) == 1:
+                self.data["dft_d3"] = float(temp_d3[0][0])
+            else:
+                for ii, entry in enumerate(temp_d3):
+                    real_d3[ii] = float(entry[0])
+                self.data["dft_d3"] = real_d3
 
         # Parse the S2 values in the case of an unrestricted calculation
         if self.data.get('unrestricted', []):
@@ -205,18 +245,6 @@ class QCOutput(MSONable):
                         spin_contamination[ii] = abs(correct_s2-entry)
                     self.data["warnings"]["spin_contamination"] = spin_contamination
 
-        # Check for inaccurate integrated density 
-        temp_inac_integ = read_pattern(
-            self.text, {
-                "key": r"Inaccurate integrated density:\n\s+Number of electrons\s+=\s+([\d\-\.]+)\n\s+Numerical integral\s+=\s+([\d\-\.]+)\n\s+Relative error\s+=\s+([\d\-\.]+)\s+\%\n"
-            }).get('key')
-        if temp_inac_integ != None:
-            inaccurate_integrated_density = np.zeros(shape=(len(temp_inac_integ), 3))
-            for ii,entry in enumerate(temp_inac_integ):
-                for jj,val in enumerate(entry):
-                    inaccurate_integrated_density[ii][jj] = float(val)
-            self.data["warnings"]["inaccurate_integrated_density"] = inaccurate_integrated_density
-
         # Check if the calculation is a geometry optimization. If so, parse the relevant output
         self.data["optimization"] = read_pattern(
             self.text, {
@@ -234,17 +262,29 @@ class QCOutput(MSONable):
                 for ii, entry in enumerate(temp_energy_trajectory):
                     real_energy_trajectory[ii] = float(entry[0])
                 self.data["energy_trajectory"] = real_energy_trajectory
-                self._read_last_geometry()
+                self._read_geometries()
                 if have_babel:
-                    self._check_for_structure_changes()
-                self._read_optimized_geometry()
+                    self.data["structure_change"] = check_for_structure_changes(
+                                                        self.data["initial_molecule"],
+                                                        self.data["molecule_from_last_geometry"])
                 self._read_gradients()
                 # Then, if no optimized geometry or z-matrix is found, and no errors have been previously
                 # idenfied, check to see if the optimization failed to converge or if Lambda wasn't able
                 # to be determined.
                 if len(self.data.get("errors")) == 0 and self.data.get('optimized_geometry') is None \
                         and len(self.data.get('optimized_zmat')) == 0:
-                    self._check_optimization_errors()
+                    if read_pattern(
+                            self.text, {
+                                "key": r"MAXIMUM OPTIMIZATION CYCLES REACHED"
+                            },
+                            terminate_on_match=True).get('key') == [[]]:
+                        self.data["errors"] += ["out_of_opt_cycles"]
+                    elif read_pattern(
+                            self.text, {
+                                "key": r"UNABLE TO DETERMINE Lamda IN FormD"
+                            },
+                            terminate_on_match=True).get('key') == [[]]:
+                        self.data["errors"] += ["unable_to_determine_lamda"]
 
         # Check if the calculation contains a constraint in an $opt section.
         self.data["opt_constraint"] = read_pattern(self.text, {
@@ -290,24 +330,6 @@ class QCOutput(MSONable):
         if self.data.get("single_point_job", []):
             self._read_single_point_data()
 
-        # Check for an MKL error, in which case include it in the warnings
-        temp_mkl = read_pattern(
-            self.text, {
-                "key": r"Intel MKL ERROR"
-            },
-            terminate_on_match=True).get("key")
-        if temp_mkl == [[]]:
-            self.data["warnings"]["mkl"] = True
-
-        # Check if the job is being hindered by a lack of analytical derivatives,
-        # in which case include it in the warnings
-        temp_not_analytic = read_pattern(
-            self.text, {
-                "key": r"Starting finite difference calculation for IDERIV"
-            },
-            terminate_on_match=True).get("key")
-        if temp_not_analytic == [[]]:
-            self.data["warnings"]["missing_analytical_derivates"] = True
 
         # If the calculation did not finish and no errors have been identified yet, check for other errors
         if not self.data.get('completion',
@@ -415,11 +437,14 @@ class QCOutput(MSONable):
                     geometry[ii, jj] = float(entry[jj + 1])
             self.data["species"] = species
             self.data["initial_geometry"] = geometry
-            self.data["initial_molecule"] = Molecule(
-                species=species,
-                coords=geometry,
-                charge=self.data.get('charge'),
-                spin_multiplicity=self.data.get('multiplicity'))
+            if self.data["charge"] != None and self.data["multiplicity"] != None:
+                self.data["initial_molecule"] = Molecule(
+                    species=species,
+                    coords=geometry,
+                    charge=self.data.get('charge'),
+                    spin_multiplicity=self.data.get('multiplicity'))
+            else:
+                self.data["initial_molecule"] = None
 
     def _read_SCF(self):
         """
@@ -519,10 +544,134 @@ class QCOutput(MSONable):
 
         self.data["Mulliken"] = real_mulliken
 
-    def _read_optimized_geometry(self):
+    def _detect_general_warnings(self):
+        # Check for inaccurate integrated density 
+        temp_inac_integ = read_pattern(
+            self.text, {
+                "key": r"Inaccurate integrated density:\n\s+Number of electrons\s+=\s+([\d\-\.]+)\n\s+Numerical integral\s+=\s+([\d\-\.]+)\n\s+Relative error\s+=\s+([\d\-\.]+)\s+\%\n"
+            }).get('key')
+        if temp_inac_integ != None:
+            inaccurate_integrated_density = np.zeros(shape=(len(temp_inac_integ), 3))
+            for ii,entry in enumerate(temp_inac_integ):
+                for jj,val in enumerate(entry):
+                    inaccurate_integrated_density[ii][jj] = float(val)
+            self.data["warnings"]["inaccurate_integrated_density"] = inaccurate_integrated_density
+
+        # Check for an MKL error
+        if read_pattern(
+                self.text, {
+                    "key": r"Intel MKL ERROR"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["mkl"] = True
+
+        # Check if the job is being hindered by a lack of analytical derivatives
+        if read_pattern(
+                self.text, {
+                    "key": r"Starting finite difference calculation for IDERIV"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["missing_analytical_derivates"] = True
+
+        # Check if the job is complaining about MO files of inconsistent size
+        if read_pattern(
+                self.text, {
+                    "key": r"Inconsistent size for SCF MO coefficient file"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["inconsistent_size"] = True
+
+        # Check for AO linear depend
+        if read_pattern(
+                self.text, {
+                    "key": r"Linear dependence detected in AO basis"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["linear_dependence"] = True
+
+        # Check for Hessian without desired local structure
+        if read_pattern(
+                self.text, {
+                    "key": r"\*\*WARNING\*\* Hessian does not have the Desired Local Structure"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["hessian_local_structure"] = True
+
+        # Check if GetCART cycle iterations ever exceeded
+        if read_pattern(
+                self.text, {
+                    "key": r"\*\*\*ERROR\*\*\* Exceeded allowed number of iterative cycles in GetCART"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["GetCART_cycles"] = True
+
+        # Check for problems with internal coordinates
+        if read_pattern(
+                self.text, {
+                    "key": r"\*\*WARNING\*\* Problems with Internal Coordinates"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["internal_coordinates"] = True
+
+        # Check for problem with eigenvalue magnitude
+        if read_pattern(
+                self.text, {
+                    "key": r"\*\*WARNING\*\* Magnitude of eigenvalue"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["eigenvalue_magnitude"] = True
+
+        # Check for problem with hereditary postivive definiteness
+        if read_pattern(
+                self.text, {
+                    "key": r"\*\*WARNING\*\* Hereditary positive definiteness endangered"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["positive_definiteness_endangered"] = True
+
+        # Check if there were problems with a colinear bend
+        if read_pattern(
+                self.text, {
+                    "key": r"\*\*\*ERROR\*\*\* Angle[\s\d]+is near\-linear\s+But No atom available to define colinear bend"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["colinear_bend"] = True
+
+        # Check if there were problems diagonalizing B*B(t)
+        if read_pattern(
+                self.text, {
+                    "key": r"\*\*\*ERROR\*\*\* Unable to Diagonalize B\*B\(t\) in <MakeNIC>"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["warnings"]["diagonalizing_BBt"] = True
+
+
+    def _read_geometries(self):
         """
-        Parses optimized XYZ coordinates. If not present, parses optimized Z-matrix.
+        Parses all geometries from an optimization trajectory.
         """
+        geoms = []
+        header_pattern = r"\s+Optimization\sCycle:\s+\d+\s+Coordinates \(Angstroms\)\s+ATOM\s+X\s+Y\s+Z"
+        table_pattern = r"\s+\d+\s+\w+\s+([\d\-\.]+)\s+([\d\-\.]+)\s+([\d\-\.]+)"
+        footer_pattern = r"\s+Point Group\:\s+[\d\w\*]+\s+Number of degrees of freedom\:\s+\d+"
+
+        parsed_geometries = read_table_pattern(
+            self.text, header_pattern, table_pattern, footer_pattern)
+        for ii, parsed_geometry in enumerate(parsed_geometries):
+            if parsed_geometry == [] or None:
+                geoms.append(None)
+            else:
+                geoms.append(process_parsed_coords(parsed_geometry))
+        self.data["geometries"] = geoms
+        self.data["last_geometry"] = geoms[-1]
+        if self.data.get('charge') != None:
+            self.data["molecule_from_last_geometry"] = Molecule(
+                species=self.data.get('species'),
+                coords=self.data.get('last_geometry'),
+                charge=self.data.get('charge'),
+                spin_multiplicity=self.data.get('multiplicity'))
+
+        # Parses optimized XYZ coordinates. If not present, parses optimized Z-matrix.
         header_pattern = r"\*+\s+OPTIMIZATION\s+CONVERGED\s+\*+\s+\*+\s+Coordinates \(Angstroms\)\s+ATOM\s+X\s+Y\s+Z"
         table_pattern = r"\s+\d+\s+\w+\s+([\d\-\.]+)\s+([\d\-\.]+)\s+([\d\-\.]+)"
         footer_pattern = r"\s+Z-matrix Print:"
@@ -547,25 +696,50 @@ class QCOutput(MSONable):
                     charge=self.data.get('charge'),
                     spin_multiplicity=self.data.get('multiplicity'))
 
+    def _get_grad_format_length(self, header):
+        """
+        Determines the maximum number of gradient entries printed on a line,
+        which changes for different versions of Q-Chem
+        """
+        found_end = False
+        index = 1
+        pattern = header
+        while not found_end:
+            if read_pattern(
+                    self.text, {
+                        "key": pattern
+                    },
+                    terminate_on_match=True).get('key') != [[]]:
+                found_end = True
+            else:
+                pattern = pattern + r"\s+" + str(index)
+                index += 1
+        return index-2
+
     def _read_gradients(self):
         """
         Parses all gradients obtained during an optimization trajectory
         """
-        header_pattern = r"Gradient of SCF Energy"
-        table_pattern = r"(?:\s+\d+(?:\s+\d+)?(?:\s+\d+)?(?:\s+\d+)?(?:\s+\d+)?(?:\s+\d+)?)?\n\s\s\s\s[1-3]\s*([\d\-\.]{2,})(?:\s*(-?[\d\.]{2,}))?(?:\s*(-?[\d\.]{2,}))?(?:\s*(-?[\d\.]{2,}))?(?:\s*(-?[\d\.]{2,}))?(?:\s*(-?[\d\.]{2,}))?"
-        footer_pattern = r"Max gradient component"
+
+        grad_header_pattern = r"Gradient of (?:SCF)?(?:MP2)? Energy(?: \(in au\.\))?"
+        footer_pattern = r"(?:Max gradient component|Gradient time)"
+
+        grad_format_length = self._get_grad_format_length(grad_header_pattern)
+        grad_table_pattern = r"(?:\s+\d+(?:\s+\d+)?(?:\s+\d+)?(?:\s+\d+)?(?:\s+\d+)?(?:\s+\d+)?)?\n\s\s\s\s[1-3]\s*(\-?[\d\.]{9,12})"
+        if grad_format_length > 1:
+            for ii in range(1,grad_format_length):
+                grad_table_pattern = grad_table_pattern + r"(?:\s*(\-?[\d\.]{9,12}))?"
 
         parsed_gradients = read_table_pattern(
-            self.text, header_pattern, table_pattern, footer_pattern)
-
+            self.text, grad_header_pattern, grad_table_pattern, footer_pattern)
         sorted_gradients = np.zeros(shape=(len(parsed_gradients), len(self.data["initial_molecule"]), 3))
         for ii, grad in enumerate(parsed_gradients):
             for jj in range(int(len(grad)/3)):
-                for kk in range(6):
+                for kk in range(grad_format_length):
                     if grad[jj*3][kk] != 'None':
-                        sorted_gradients[ii][jj*6+kk][0] = grad[jj*3][kk]
-                        sorted_gradients[ii][jj*6+kk][1] = grad[jj*3+1][kk]
-                        sorted_gradients[ii][jj*6+kk][2] = grad[jj*3+2][kk]
+                        sorted_gradients[ii][jj*grad_format_length+kk][0] = grad[jj*3][kk]
+                        sorted_gradients[ii][jj*grad_format_length+kk][1] = grad[jj*3+1][kk]
+                        sorted_gradients[ii][jj*grad_format_length+kk][2] = grad[jj*3+2][kk]
 
         self.data["gradients"] = sorted_gradients
 
@@ -592,71 +766,23 @@ class QCOutput(MSONable):
                 },
                 terminate_on_match=True).get('key') == [[]]:
             header_pattern = r"Gradient of CDS energy"
-            table_pattern = r"(?:\s+\d+(?:\s+\d+)?(?:\s+\d+)?(?:\s+\d+)?(?:\s+\d+)?(?:\s+\d+)?)?\n\s\s\s\s[1-3]\s*([\d\-\.]{2,})(?:\s+([\d\-\.]{2,}))?(?:\s+([\d\-\.]{2,}))?(?:\s+([\d\-\.]{2,}))?(?:\s+([\d\-\.]{2,}))?(?:\s+([\d\-\.]{2,}))?"
-            footer_pattern = r"Gradient of SCF Energy"
 
             parsed_gradients = read_table_pattern(
-                self.text, header_pattern, table_pattern, footer_pattern)
+                self.text, header_pattern, grad_table_pattern, grad_header_pattern)
 
             sorted_gradients = np.zeros(shape=(len(parsed_gradients), len(self.data["initial_molecule"]), 3))
             for ii, grad in enumerate(parsed_gradients):
                 for jj in range(int(len(grad)/3)):
-                    for kk in range(6):
+                    for kk in range(grad_format_length):
                         if grad[jj*3][kk] != 'None':
-                            sorted_gradients[ii][jj*6+kk][0] = grad[jj*3][kk]
-                            sorted_gradients[ii][jj*6+kk][1] = grad[jj*3+1][kk]
-                            sorted_gradients[ii][jj*6+kk][2] = grad[jj*3+2][kk]
+                            sorted_gradients[ii][jj*grad_format_length+kk][0] = grad[jj*3][kk]
+                            sorted_gradients[ii][jj*grad_format_length+kk][1] = grad[jj*3+1][kk]
+                            sorted_gradients[ii][jj*grad_format_length+kk][2] = grad[jj*3+2][kk]
 
             self.data["CDS_gradients"] = sorted_gradients
         else:
             self.data["CDS_gradients"] = None
 
-    def _read_last_geometry(self):
-        """
-        Parses the last geometry from an optimization trajectory for use in a new input file.
-        """
-        header_pattern = r"\s+Optimization\sCycle:\s+" + \
-            str(len(self.data.get("energy_trajectory"))) + \
-            r"\s+Coordinates \(Angstroms\)\s+ATOM\s+X\s+Y\s+Z"
-        table_pattern = r"\s+\d+\s+\w+\s+([\d\-\.]+)\s+([\d\-\.]+)\s+([\d\-\.]+)"
-        footer_pattern = r"\s+Point Group\:\s+[\d\w\*]+\s+Number of degrees of freedom\:\s+\d+"
-
-        parsed_last_geometry = read_table_pattern(
-            self.text, header_pattern, table_pattern, footer_pattern)
-        if parsed_last_geometry == [] or None:
-            self.data["last_geometry"] = None
-        else:
-            self.data["last_geometry"] = process_parsed_coords(
-                parsed_last_geometry[0])
-            if self.data.get('charge') != None:
-                self.data["molecule_from_last_geometry"] = Molecule(
-                    species=self.data.get('species'),
-                    coords=self.data.get('last_geometry'),
-                    charge=self.data.get('charge'),
-                    spin_multiplicity=self.data.get('multiplicity'))
-
-    def _check_for_structure_changes(self):
-        initial_mol_graph = MoleculeGraph.with_local_env_strategy(self.data["initial_molecule"],
-                                                                  OpenBabelNN(),
-                                                                  reorder=False,
-                                                                  extend_structure=False)
-        initial_graph = initial_mol_graph.graph
-        last_mol_graph = MoleculeGraph.with_local_env_strategy(self.data["molecule_from_last_geometry"],
-                                                               OpenBabelNN(),
-                                                               reorder=False,
-                                                               extend_structure=False)
-        last_graph = last_mol_graph.graph
-        if initial_mol_graph.isomorphic_to(last_mol_graph):
-            self.data["structure_change"] = "no_change"
-        else:
-            if nx.is_connected(initial_graph.to_undirected()) and not nx.is_connected(last_graph.to_undirected()):
-                self.data["structure_change"] = "unconnected_fragments"
-            elif last_graph.number_of_edges() < initial_graph.number_of_edges():
-                self.data["structure_change"] = "fewer_bonds"
-            elif last_graph.number_of_edges() > initial_graph.number_of_edges():
-                self.data["structure_change"] = "more_bonds"
-            else:
-                self.data["structure_change"] = "bond_change"
 
     def _read_frequency_data(self):
         """
@@ -665,9 +791,11 @@ class QCOutput(MSONable):
         temp_dict = read_pattern(
             self.text, {
                 "frequencies":
-                r"\s*Frequency:\s+([\d\-\.]+)(?:\s+([\d\-\.]+)(?:\s+([\d\-\.]+))*)*",
+                r"\s*Frequency:\s+(\-?[\d\.\*]+)(?:\s+(\-?[\d\.\*]+)(?:\s+(\-?[\d\.\*]+))*)*",
+                "trans_dip":
+                r"TransDip\s+(\-?[\d\.]{5,7}|\*{5,7})\s*(\-?[\d\.]{5,7}|\*{5,7})\s*(\-?[\d\.]{5,7}|\*{5,7})\s*(?:(\-?[\d\.]{5,7}|\*{5,7})\s*(\-?[\d\.]{5,7}|\*{5,7})\s*(\-?[\d\.]{5,7}|\*{5,7})\s*(?:(\-?[\d\.]{5,7}|\*{5,7})\s*(\-?[\d\.]{5,7}|\*{5,7})\s*(\-?[\d\.]{5,7}|\*{5,7}))*)*",
                 "IR_intens":
-                r"\s*IR Intens:\s+([\d\-\.]+)(?:\s+([\d\-\.]+)(?:\s+([\d\-\.]+))*)*",
+                r"\s*IR Intens:\s*(\-?[\d\.\*]+)(?:\s+(\-?[\d\.\*]+)(?:\s+(\-?[\d\.\*]+))*)*",
                 "IR_active":
                 r"\s*IR Active:\s+([YESNO]+)(?:\s+([YESNO]+)(?:\s+([YESNO]+))*)*",
                 "ZPE":
@@ -704,6 +832,7 @@ class QCOutput(MSONable):
             self.data['frequencies'] = None
             self.data['IR_intens'] = None
             self.data['IR_active'] = None
+            self.data['trans_dip'] = None
         else:
             temp_freqs = [
                 value for entry in temp_dict.get('frequencies')
@@ -717,23 +846,57 @@ class QCOutput(MSONable):
                 value for entry in temp_dict.get('IR_active')
                 for value in entry
             ]
+            temp_trans_dip = [
+                value for entry in temp_dict.get('trans_dip')
+                for value in entry
+            ]
             self.data['IR_active'] = active
+
+            trans_dip = np.zeros(shape=(int((len(temp_trans_dip) - temp_trans_dip.count('None'))/3),3))
+            for ii, entry in enumerate(temp_trans_dip):
+                if entry != 'None':
+                    if "*" in entry:
+                        trans_dip[int(ii/3)][ii%3] = float("inf")
+                    else:
+                        trans_dip[int(ii/3)][ii%3] = float(entry)
+            self.data['trans_dip'] = trans_dip
 
             freqs = np.zeros(len(temp_freqs) - temp_freqs.count('None'))
             for ii, entry in enumerate(temp_freqs):
                 if entry != 'None':
-                    freqs[ii] = float(entry)
+                    if "*" in entry:
+                        if ii==0:
+                            freqs[ii] = -float("inf")
+                        elif ii==len(freqs)-1:
+                            freqs[ii] = float("inf")
+                        elif freqs[ii-1]==-float("inf"):
+                            freqs[ii] = -float("inf")
+                        elif "*" in temp_freqs[ii+1]:
+                            freqs[ii]=float("inf")
+                        else:
+                            raise RuntimeError("ERROR: Encountered an undefined frequency not at the beginning or end of the frequency list, which makes no sense! Exiting...")
+                        if not self.data.get('completion',[]):
+                            if "undefined_frequency" not in self.data["errors"]:
+                                self.data["errors"] += ["undefined_frequency"]
+                        else:
+                            if "undefined_frequency" not in self.data["warnings"]:
+                                self.data["warnings"]["undefined_frequency"] = True
+                    else:
+                        freqs[ii] = float(entry)
             self.data['frequencies'] = freqs
 
             intens = np.zeros(len(temp_intens) - temp_intens.count('None'))
             for ii, entry in enumerate(temp_intens):
                 if entry != 'None':
-                    intens[ii] = float(entry)
+                    if "*" in entry:
+                        intens[ii] = float("inf")
+                    else:
+                        intens[ii] = float(entry)
             self.data['IR_intens'] = intens
 
             header_pattern = r"\s*Raman Active:\s+[YESNO]+\s+(?:[YESNO]+\s+)*X\s+Y\s+Z\s+(?:X\s+Y\s+Z\s+)*"
             table_pattern = r"\s*[a-zA-Z][a-zA-Z\s]\s*([\d\-\.]+)\s*([\d\-\.]+)\s*([\d\-\.]+)\s*(?:([\d\-\.]+)\s*([\d\-\.]+)\s*([\d\-\.]+)\s*(?:([\d\-\.]+)\s*([\d\-\.]+)\s*([\d\-\.]+))*)*"
-            footer_pattern = r"TransDip\s+[\d\-\.]+\s*[\d\-\.]+\s*[\d\-\.]+\s*(?:[\d\-\.]+\s*[\d\-\.]+\s*[\d\-\.]+\s*)*"
+            footer_pattern = r"TransDip\s+\-?[\d\.\*]+\s*\-?[\d\.\*]+\s*\-?[\d\.\*]+\s*(?:\-?[\d\.\*]+\s*\-?[\d\.\*]+\s*\-?[\d\.\*]+\s*)*"
             temp_freq_mode_vecs = read_table_pattern(
                 self.text, header_pattern, table_pattern, footer_pattern)
             freq_mode_vecs = np.zeros(
@@ -747,6 +910,9 @@ class QCOutput(MSONable):
                                            jj, kk % 3] = float(entry)
 
             self.data["frequency_mode_vectors"] = freq_mode_vecs
+            freq_length = len(self.data["frequencies"])
+            if len(self.data["frequency_mode_vectors"]) != freq_length or len(self.data["IR_intens"]) != freq_length or len(self.data["IR_active"]) != freq_length:
+                self.data["warnings"]["frequency_length_inconsistency"] = True
 
     def _read_single_point_data(self):
         """
@@ -826,31 +992,6 @@ class QCOutput(MSONable):
         for key in pcm_keys:
             self.data["solvent_data"][key] = None
 
-    def _check_optimization_errors(self):
-        """
-        Parses three potential optimization errors: failing to converge within the allowed number
-        of optimization cycles, failure to determine the lamda needed to continue, and inconsistent
-        size of MO files due to a linear dependence in the AO basis.
-        """
-        if read_pattern(
-                self.text, {
-                    "key": r"MAXIMUM OPTIMIZATION CYCLES REACHED"
-                },
-                terminate_on_match=True).get('key') == [[]]:
-            self.data["errors"] += ["out_of_opt_cycles"]
-        elif read_pattern(
-                self.text, {
-                    "key": r"UNABLE TO DETERMINE Lamda IN FormD"
-                },
-                terminate_on_match=True).get('key') == [[]]:
-            self.data["errors"] += ["unable_to_determine_lamda"]
-        elif read_pattern(
-                self.text, {
-                    "key": r"Inconsistent size for SCF MO coefficient file"
-                },
-                terminate_on_match=True).get('key') == [[]]:
-            self.data["errors"] += ["linear_dependent_basis"]
-
     def _check_completion_errors(self):
         """
         Parses four potential errors that can cause jobs to crash: inability to transform
@@ -882,7 +1023,13 @@ class QCOutput(MSONable):
                     "key": r"FileMan error: End of file reached prematurely"
                 },
                 terminate_on_match=True).get('key') == [[]]:
-            self.data["errors"] += ["IO_error"]
+            self.data["errors"] += ["premature_end_FileMan_error"]   
+        elif read_pattern(
+                self.text, {
+                    "key": r"method not available"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["errors"] += ["method_not_available"] 
         elif read_pattern(
                 self.text, {
                     "key": r"Could not find \$molecule section in ParseQInput"
@@ -895,6 +1042,12 @@ class QCOutput(MSONable):
                 },
                 terminate_on_match=True).get('key') != [[]]:
             self.data["errors"] += ["never_called_qchem"]
+        elif read_pattern(
+                self.text, {
+                    "key": r"\*\*\*ERROR\*\*\* Hessian Appears to have all zero or negative eigenvalues"
+                },
+                terminate_on_match=True).get('key') == [[]]:
+            self.data["errors"] += ["hessian_eigenvalue_error"]
         else: 
             tmp_failed_line_searches = read_pattern(
                 self.text, {
@@ -913,3 +1066,50 @@ class QCOutput(MSONable):
         d["text"] = self.text
         d["filename"] = self.filename
         return jsanitize(d, strict=True)
+
+
+def check_for_structure_changes(mol1, mol2):
+    special_elements = ["Li", "Na", "Mg", "Ca", "Zn"]
+    mol_list = [copy.deepcopy(mol1), copy.deepcopy(mol2)]
+
+    if mol1.composition != mol2.composition:
+        raise RuntimeError("Molecules have different compositions! Exiting...")
+
+    for ii, site in enumerate(mol1):
+        if site.specie.symbol != mol2[ii].specie.symbol:
+            print("WARNING: Comparing molecules with different atom ordering! Turning off special treatment for coordinating metals.")
+            special_elements = []
+
+    special_sites = [[],[]]
+    for ii, mol in enumerate(mol_list):
+        for jj, site in enumerate(mol):
+            if site.specie.symbol in special_elements:
+                distances = [[kk,site.distance(other_site)] for kk,other_site in enumerate(mol)]
+                special_sites[ii].append([jj,site,distances])
+        for jj, site in enumerate(mol):
+            if site.specie.symbol in special_elements:
+                mol.__delitem__(jj)
+
+    # Can add logic to check the distances in the future if desired
+
+    initial_mol_graph = MoleculeGraph.with_local_env_strategy(mol_list[0],
+                                                              OpenBabelNN(),
+                                                              reorder=False,
+                                                              extend_structure=False)
+    initial_graph = initial_mol_graph.graph
+    last_mol_graph = MoleculeGraph.with_local_env_strategy(mol_list[1],
+                                                           OpenBabelNN(),
+                                                           reorder=False,
+                                                           extend_structure=False)
+    last_graph = last_mol_graph.graph
+    if initial_mol_graph.isomorphic_to(last_mol_graph):
+        return "no_change"
+    else:
+        if nx.is_connected(initial_graph.to_undirected()) and not nx.is_connected(last_graph.to_undirected()):
+            return "unconnected_fragments"
+        elif last_graph.number_of_edges() < initial_graph.number_of_edges():
+            return "fewer_bonds"
+        elif last_graph.number_of_edges() > initial_graph.number_of_edges():
+            return "more_bonds"
+        else:
+            return "bond_change"

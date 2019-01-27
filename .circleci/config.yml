@@ -28,7 +28,7 @@ jobs:
             pip install BoltzTraP2
             export CFLAGS=${CFLAGS%% -std=gnu++11}
             rm -r coverage_reports
-      - save_cache: # special step to save dependency cache
+      - save_cache: # special step to save dependency cache 
           key: deps1-{{ .Branch }}-{{ checksum "requirements.txt" }}-{{ checksum "requirements-optional.txt" }}
           paths:
             - "/root/miniconda3/envs/test_env"
@@ -50,7 +50,6 @@ jobs:
             pmg structure --convert --filenames test_files/Li2O.cif POSCAR.pmg
             pmg structure --convert --filenames POSCAR.pmg pmg.cif
             pmg analyze -d test_files
-            if [ "$CI_PULL_REQUEST" == "" ]; then coveralls; fi
           no_output_timeout: 3600
       - store_artifacts:
           path: coverage_reports/
