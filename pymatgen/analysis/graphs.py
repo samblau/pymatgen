@@ -41,6 +41,50 @@ __date__ = "August 2017"
 
 ConnectedSite = namedtuple('ConnectedSite', 'site, jimage, index, weight, dist')
 
+def compare(g1, g2, i1, i2):
+    return g1.vs[i1]['species'] == g2.vs[i2]['species']
+
+def igraph_from_nxgraph(graph):
+    import igraph
+    nodes=graph.nodes(data=True)
+    new_igraph = igraph.Graph()
+    for node in nodes:
+        new_igraph.add_vertex(name=str(node[0]),species=node[1]["specie"],coords=node[1]["coords"])
+    new_igraph.add_edges([(str(edge[0]),str(edge[1])) for edge in graph.edges()])
+    return new_igraph
+
+def isomorphic(frag1, frag2, use_igraph=True):
+    f1_nodes = frag1.nodes(data=True)
+    f2_nodes = frag2.nodes(data=True)
+    if len(f1_nodes) != len(f2_nodes):
+        return False
+    f1_edges = frag1.edges()
+    f2_edges = frag2.edges()
+    if len(f2_edges) != len(f2_edges):
+        return False
+    f1_comp_dict = {}
+    f2_comp_dict = {}
+    for node in f1_nodes:
+        if node[1]["specie"] not in f1_comp_dict:
+            f1_comp_dict[node[1]["specie"]] = 1
+        else:
+            f1_comp_dict[node[1]["specie"]] += 1
+    for node in f2_nodes:
+        if node[1]["specie"] not in f2_comp_dict:
+            f2_comp_dict[node[1]["specie"]] = 1
+        else:
+            f2_comp_dict[node[1]["specie"]] += 1
+    if f1_comp_dict != f2_comp_dict:
+        return False
+    if not use_igraph:
+        nm = iso.categorical_node_match("specie", "ERROR")
+        return nx.is_isomorphic(frag1.to_undirected(), frag2.to_undirected(), node_match=nm)
+    else:
+        ifrag1 = igraph_from_nxgraph(frag1)
+        ifrag2 = igraph_from_nxgraph(frag2)
+        # if ifrag1.isomorphic_bliss(ifrag2):
+        return ifrag1.isomorphic_vf2(ifrag2,node_compat_fn=compare)
+        # return False
 
 class StructureGraph(MSONable):
     """
@@ -380,12 +424,12 @@ class StructureGraph(MSONable):
                               properties=site_properties)
 
         mapping = {}
-        for j in range(len(self.structure)):
+        for j in range(len(self.structure) - 1):
             if j < i:
                 mapping[j] = j
             else:
                 mapping[j] = j + 1
-        nx.relabel_nodes(self.graph, mapping)
+        nx.relabel_nodes(self.graph, mapping, copy=False)
 
         self.graph.add_node(i)
         self.set_node_attributes()
@@ -520,10 +564,10 @@ class StructureGraph(MSONable):
         self.graph.remove_nodes_from(indices)
 
         mapping = {}
-        for correct, current in enumerate(self.graph.nodes):
+        for correct, current in enumerate(sorted(self.graph.nodes)):
             mapping[current] = correct
 
-        nx.relabel_nodes(self.graph, mapping)
+        nx.relabel_nodes(self.graph, mapping, copy=False)
         self.set_node_attributes()
 
     def substitute_group(self, index, func_grp, strategy, bond_order=1,
@@ -640,6 +684,7 @@ class StructureGraph(MSONable):
         """
 
         connected_sites = set()
+        connected_site_images = set()
 
         out_edges = [(u, v, d, 'out') for u, v, d in self.graph.out_edges(n, data=True)]
         in_edges = [(u, v, d, 'in') for u, v, d in self.graph.in_edges(n, data=True)]
@@ -663,13 +708,16 @@ class StructureGraph(MSONable):
 
             weight = d.get('weight', None)
 
-            connected_site = ConnectedSite(site=site,
-                                           jimage=to_jimage,
-                                           index=v,
-                                           weight=weight,
-                                           dist=dist)
+            if (v, to_jimage) not in connected_site_images:
 
-            connected_sites.add(connected_site)
+                connected_site = ConnectedSite(site=site,
+                                               jimage=to_jimage,
+                                               index=v,
+                                               weight=weight,
+                                               dist=dist)
+
+                connected_sites.add(connected_site)
+                connected_site_images.add((v, to_jimage))
 
         # return list sorted by closest sites first
         connected_sites = list(connected_sites)
@@ -1023,7 +1071,7 @@ class StructureGraph(MSONable):
 
             for idx, site in enumerate(self.structure):
 
-                s = PeriodicSite(site.species_and_occu, site.coords + v,
+                s = PeriodicSite(site.species, site.coords + v,
                                  new_lattice, properties=site.properties,
                                  coords_are_cartesian=True, to_unit_cell=False)
 
@@ -1770,12 +1818,12 @@ class MoleculeGraph(MSONable):
                              properties=site_properties)
 
         mapping = {}
-        for j in range(len(self.molecule)):
+        for j in range(len(self.molecule) - 1):
             if j < i:
                 mapping[j] = j
             else:
                 mapping[j] = j + 1
-        nx.relabel_nodes(self.graph, mapping)
+        nx.relabel_nodes(self.graph, mapping, copy=False)
 
         self.graph.add_node(i)
         self.set_node_attributes()
@@ -1890,10 +1938,10 @@ class MoleculeGraph(MSONable):
         self.graph.remove_nodes_from(indices)
 
         mapping = {}
-        for correct, current in enumerate(self.graph.nodes):
+        for correct, current in enumerate(sorted(self.graph.nodes)):
             mapping[current] = correct
 
-        nx.relabel_nodes(self.graph, mapping)
+        nx.relabel_nodes(self.graph, mapping, copy=False)
         self.set_node_attributes()
 
     def split_molecule_subgraphs(self, bonds, allow_reverse=False,
@@ -2008,7 +2056,7 @@ class MoleculeGraph(MSONable):
 
             return sub_mols
 
-    def build_unique_fragments(self):
+    def build_unique_fragments(self, use_igraph=False):
         """
         Find all possible fragment combinations of the MoleculeGraphs (in other
         words, all connected induced subgraphs)
@@ -2019,44 +2067,62 @@ class MoleculeGraph(MSONable):
 
         graph = self.graph.to_undirected()
 
-        nm = iso.categorical_node_match("specie", "ERROR")
-
         # find all possible fragments, aka connected induced subgraphs
-        all_fragments = []
+        frag_dict = {}
         for ii in range(1, len(self.molecule)):
             for combination in combinations(graph.nodes, ii):
+                mycomp = []
+                for idx in combination:
+                    mycomp.append(str(self.molecule[idx].specie))
+                mycomp="".join(sorted(mycomp))
                 subgraph = nx.subgraph(graph, combination)
                 if nx.is_connected(subgraph):
-                    all_fragments.append(subgraph)
+                    mykey = mycomp+str(len(subgraph.edges()))
+                    if mykey not in frag_dict:
+                        frag_dict[mykey] = [copy.deepcopy(subgraph)]
+                    else:
+                        frag_dict[mykey].append(copy.deepcopy(subgraph))
 
         # narrow to all unique fragments using graph isomorphism
-        unique_fragments = []
-        for fragment in all_fragments:
-            if not [nx.is_isomorphic(fragment, f, node_match=nm)
-                    for f in unique_fragments].count(True) >= 1:
-                unique_fragments.append(fragment)
+        unique_frag_dict = {}
+        for key in frag_dict:
+            unique_frags = []
+            for frag in frag_dict[key]:
+                found = False
+                for f in unique_frags:
+                    if isomorphic(frag,f,use_igraph=use_igraph):
+                        found = True
+                        break
+                if not found:
+                    unique_frags.append(frag)
+            unique_frag_dict[key] = copy.deepcopy(unique_frags)
 
         # convert back to molecule graphs
-        unique_mol_graphs = []
-        for fragment in unique_fragments:
-            mapping = {e: i for i, e in enumerate(sorted(fragment.nodes))}
-            remapped = nx.relabel_nodes(fragment, mapping)
+        unique_mol_graph_dict = {}
+        for key in unique_frag_dict:
+            unique_mol_graph_list = []
+            for fragment in unique_frag_dict[key]:
+                mapping = {e: i for i, e in enumerate(sorted(fragment.nodes))}
+                remapped = nx.relabel_nodes(fragment, mapping)
 
-            species = nx.get_node_attributes(remapped, "specie")
-            coords = nx.get_node_attributes(remapped, "coords")
+                species = nx.get_node_attributes(remapped, "specie")
+                coords = nx.get_node_attributes(remapped, "coords")
 
-            edges = {}
+                edges = {}
 
-            for from_index, to_index, key in remapped.edges:
-                edge_props = fragment.get_edge_data(from_index, to_index, key=key)
+                for from_index, to_index, key in remapped.edges:
+                    edge_props = fragment.get_edge_data(from_index, to_index, key=key)
 
-                edges[(from_index, to_index)] = edge_props
+                    edges[(from_index, to_index)] = edge_props
 
-            unique_mol_graphs.append(self.with_edges(Molecule(species=species,
-                                                              coords=coords,
-                                                              charge=self.molecule.charge),
-                                                     edges))
-        return unique_mol_graphs
+                unique_mol_graph_list.append(self.with_edges(Molecule(species=species,
+                                                                      coords=coords,
+                                                                      charge=self.molecule.charge),
+                                                             edges))
+            # print(len(unique_mol_graph_list))
+            frag_key = str(unique_mol_graph_list[0].molecule.composition.alphabetical_formula)+" E"+str(len(unique_mol_graph_list[0].graph.edges()))
+            unique_mol_graph_dict[frag_key] = copy.deepcopy(unique_mol_graph_list)
+        return unique_mol_graph_dict
 
     def substitute_group(self, index, func_grp, strategy, bond_order=1,
                          graph_dict=None, strategy_params=None, reorder=True,
@@ -2689,23 +2755,34 @@ class MoleculeGraph(MSONable):
         return (edges == edges_other) and \
                (self.molecule == other_sorted.molecule)
 
-    def isomorphic_to(self, other):
-        """
-        Checks if the graphs of two MoleculeGraphs are isomorphic to one
-        another. In order to prevent problems with misdirected edges, both
-        graphs are converted into undirected nx.Graph objects.
+    # def isomorphic_to(self, other, use_igraph=False):
+    #     """
+    #     Checks if the graphs of two MoleculeGraphs are isomorphic to one
+    #     another. In order to prevent problems with misdirected edges, both
+    #     graphs are converted into undirected nx.Graph objects.
 
-        :param other: MoleculeGraph object to be compared.
-        :return: bool
-        """
-        if self.molecule.composition != other.molecule.composition:
-            return False
-        else:
-            self_undir = self.graph.to_undirected()
-            other_undir = other.graph.to_undirected()
-            nm = iso.categorical_node_match("specie", "ERROR")
-            isomorphic = nx.is_isomorphic(self_undir, other_undir, node_match=nm)
-            return isomorphic
+    #     :param other: MoleculeGraph object to be compared.
+    #     :return: bool
+    #     """
+    #     if len(self.molecule) != len(other.molecule):
+    #         return False
+    #     elif self.molecule.composition.alphabetical_formula != other.molecule.composition.alphabetical_formula:
+    #         return False
+    #     elif len(self.graph.edges()) != len(other.graph.edges()):
+    #         return False
+    #     elif use_igraph:
+    #         import igraph
+    #         self_igraph = igraph_from_nxgraph(self.graph)
+    #         other_igraph = igraph_from_nxgraph(other.graph)
+    #         if self_igraph.isomorphic_bliss(other_igraph):
+    #             return self_igraph.isomorphic_vf2(other_igraph,node_compat_fn=compare)
+    #         return False
+    #     else:
+    #         self_undir = self.graph.to_undirected()
+    #         other_undir = other.graph.to_undirected()
+    #         nm = iso.categorical_node_match("specie", "ERROR")
+    #         isomorphic = nx.is_isomorphic(self_undir, other_undir, node_match=nm)
+    #         return isomorphic
 
     def diff(self, other, strict=True):
         """
