@@ -113,7 +113,8 @@ def read_table_pattern_with_useful_header_footer(text_str,
                                                  footer_pattern,
                                                  postprocess=str,
                                                  attribute_name=None,
-                                                 last_one_only=False):
+                                                 last_one_only=False,
+                                                 num_rows=None):
     """
     Parse table-like data, retaining information from the header and footer. A
     table composes of three parts: header, main body, footer. All data, matching
@@ -141,6 +142,8 @@ def read_table_pattern_with_useful_header_footer(text_str,
             is set to True, only the last table will be returned. The
             enclosing list will be removed. i.e. Only a single table will
             be returned. Default to be True.
+        num_rows (int): If not None (default), only accept a certain number of
+            rows.
 
     Returns:
         Dict of lists of tables. 1) A table is a list of rows. 2) A row if
@@ -149,9 +152,17 @@ def read_table_pattern_with_useful_header_footer(text_str,
         capturing groups are defined by row_pattern.
     """
 
+    # Determine number of rows allowed/expected
+    # Default is 1 - infinity
+    # if num_rows is given, only accept a table with a particular number of rows
+    if num_rows is None:
+        num_str = r")+)\s*"
+    else:
+        num_str = r"){" + str(num_rows) + r"})\s*"
+
     table_pattern_text = r"\s*(?P<table_header>(?:" + header_pattern + \
                          r"))" + r"\s*(?P<table_body>(?:" + row_pattern + \
-                         r")+)\s*" + r"(?P<table_footer>(?:" + footer_pattern + \
+                         num_str + r"(?P<table_footer>(?:" + footer_pattern + \
                          r"))\s*"
     table_pattern = re.compile(table_pattern_text, re.MULTILINE | re.DOTALL)
     hp = re.compile(header_pattern)

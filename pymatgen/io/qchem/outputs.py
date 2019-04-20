@@ -1082,13 +1082,19 @@ class QCStringfileParser:
             self.text = f.read()
 
         header_pattern = r"(?P<length>\d+)\s*\n\s*image\s+#\s+\d+\s+Energy\s+=\s+(?P<image_energy>[\-\.0-9]+)"
-        row_pattern = r"\s*\d+\s+([a-zA-Z]+)\s*([\d\-\.]+)\s*([\d\-\.]+)\s*([\d\-\.]+)\s*"
+
+        hp = re.compile(header_pattern)
+        first_row = hp.match(self.text)
+        length = int(first_row.groupdict()["length"])
+
+        row_pattern = r"\s*([a-zA-Z]+)\s*([\d\-\.]+)\s*([\d\-\.]+)\s*([\d\-\.]+)\s*"
         footer_pattern = r""
 
         temp_data = read_table_pattern_with_useful_header_footer(self.text,
                                                                  header_pattern=header_pattern,
                                                                  row_pattern=row_pattern,
-                                                                 footer_pattern=footer_pattern)
+                                                                 footer_pattern=footer_pattern,
+                                                                 num_rows=length)
         headers = temp_data["header"]
         bodies = temp_data["body"]
 
