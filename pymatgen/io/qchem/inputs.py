@@ -4,15 +4,19 @@
 
 
 import logging
+import numpy as np
 from monty.json import MSONable
 from monty.io import zopen
 from pymatgen.core import Molecule
+from pymatgen.analysis.graphs import MoleculeGraph
+from pymatgen.analysis.local_env import OpenBabelNN
 from .utils import read_table_pattern, read_pattern, lower_and_check_unique
 
 # Classes for reading/manipulating/writing QChem ouput files.
 
 
-__author__ = "Brandon Wood, Samuel Blau, Shyam Dwaraknath, Julian Self"
+__author__ = "Brandon Wood, Samuel Blau, Shyam Dwaraknath, Julian Self, " \
+             "Evan Spotte-Smith"
 __copyright__ = "Copyright 2018, The Materials Project"
 __version__ = "0.1"
 __email__ = "b.wood@berkeley.edu"
@@ -52,16 +56,62 @@ class QCInput(MSONable):
         self.solvent = lower_and_check_unique(solvent)
         self.smx = lower_and_check_unique(smx)
 
-        # Make sure molecule is valid: either the string "read" or a pymatgen molecule object
+        # Make sure molecule is valid
 
         if isinstance(self.molecule, str):
             self.molecule = self.molecule.lower()
             if self.molecule != "read":
                 raise ValueError(
                     'The only acceptable text value for molecule is "read"')
+
+        # Allows for multiple molecules, which is necessary for fsm jobs
+        elif isinstance(self.molecule, dict):
+            # Make sure that dict has proper keys
+            if not ("reactants" in self.molecule
+                    and "products" in self.molecule):
+                raise ValueError("Molecule dictionaries must include two keys, "
+                                 "'reactants' and 'products', the values of "
+                                 "which are lists of pymatgen Molecule objects.")
+
+            # Make sure that all entries are actually Molecule objects
+            try:
+                mols = self.molecule["reactants"] + self.molecule["products"]
+
+                for mol in mols:
+                    if not isinstance(mol, Molecule):
+                        raise ValueError("All entries in molecule "
+                                         "dictionaries must be lists of "
+                                         "pymatgen Molecule objects.")
+
+            except TypeError:
+                raise ValueError("Molecule dictionaries must include two "
+                                 "keys, 'reactants' and 'products', the "
+                                 "values of which are lists of pymatgen "
+                                 "Molecule objects.")
+
+            # Make sure that reactants and products are identical
+            rct_len = sum(len(m) for m in self.molecule["reactants"])
+            rct_spec = list()
+
+            for rct in self.molecule["reactants"]:
+                for site in rct.sites:
+                    rct_spec.append(str(site.specie))
+
+            pro_len = sum(len(m) for m in self.molecule["products"])
+            pro_spec = list()
+
+            for pro in self.molecule["products"]:
+                for site in pro.sites:
+                    pro_spec.append(str(site.specie))
+
+            if rct_len != pro_len or rct_spec != pro_spec:
+                raise ValueError("Reactants and products are not identical.")
+
         elif not isinstance(self.molecule, Molecule):
             raise ValueError(
-                "The molecule must either be the string 'read' or be a pymatgen Molecule object"
+                "The molecule must either be the string 'read', a pymatgen "
+                "Molecule object, or a dictionary of lists of Molecule objects "
+                "with two keys, 'reactants' and 'products'."
             )
 
         # Make sure rem is valid:
@@ -70,7 +120,7 @@ class QCInput(MSONable):
         #   - Has a valid job_type or jobtype
 
         valid_job_types = [
-            "opt", "optimization", "sp", "freq", "frequency", "nmr"
+            "opt", "optimization", "sp", "freq", "frequency", "nmr", "fsm", "ts"
         ]
 
         if "basis" not in self.rem:
@@ -95,9 +145,12 @@ class QCInput(MSONable):
         #   - Check OPT and PCM sections?
 
     def __str__(self):
-        combined_list = []
+        combined_list = list()
         # molecule section
-        combined_list.append(self.molecule_template(self.molecule))
+        if isinstance(self.molecule, dict):
+            combined_list.append(self.multi_molecule_template(self.molecule))
+        else:
+            combined_list.append(self.molecule_template(self.molecule))
         combined_list.append("")
         # rem section
         combined_list.append(self.rem_template(self.rem))
@@ -176,7 +229,7 @@ class QCInput(MSONable):
     @staticmethod
     def molecule_template(molecule):
         # todo: add ghost atoms
-        mol_list = []
+        mol_list = list()
         mol_list.append("$molecule")
         if isinstance(molecule, str):
             if molecule == "read":
@@ -196,8 +249,57 @@ class QCInput(MSONable):
         return '\n'.join(mol_list)
 
     @staticmethod
+    def multi_molecule_template(molecule):
+        mol_list = list()
+        mol_list.append("$molecule")
+
+        # Make sure molecules are sufficiently separated
+        reactants = list()
+        products = list()
+        for rct in molecule["reactants"]:
+            reactants.append(rct.get_centered_molecule())
+        for pro in molecule["products"]:
+            products.append(pro.get_centered_molecule())
+
+        rct_dist_sum = 0
+        pro_dist_sum = 0
+        for rct in reactants:
+            diameter = np.max(rct.distance_matrix)
+            if rct_dist_sum > 0:
+                rct.translate_sites(vector=np.array([rct_dist_sum + diameter + 1
+                                                     for _ in range(3)]))
+            rct_dist_sum += diameter + 1
+
+        for pro in products:
+            diameter = np.max(pro.distance_matrix)
+            if pro_dist_sum > 0:
+                pro.translate_sites(vector=np.array([pro_dist_sum + diameter + 1
+                                                     for _ in range(3)]))
+
+        total_charge = int(sum([mol.charge for mol in reactants]))
+        total_spin = sum([mol.spin_multiplicity for mol in reactants])
+        mol_list.append(" {charge} {spin_mult}".format(
+            charge=total_charge,
+            spin_mult=total_spin))
+        for rct in reactants:
+            for site in rct.sites:
+                mol_list.append(
+                    " {atom}     {x: .10f}     {y: .10f}     {z: .10f}".format(
+                        atom=site.species_string, x=site.x, y=site.y,
+                        z=site.z))
+        mol_list.append(" ****")
+        for pro in products:
+            for site in pro.sites:
+                mol_list.append(
+                    " {atom}     {x: .10f}     {y: .10f}     {z: .10f}".format(
+                        atom=site.species_string, x=site.x, y=site.y,
+                        z=site.z))
+        mol_list.append("$end")
+        return '\n'.join(mol_list)
+
+    @staticmethod
     def rem_template(rem):
-        rem_list = []
+        rem_list = list()
         rem_list.append("$rem")
         for key, value in rem.items():
             rem_list.append("   {key} = {value}".format(key=key, value=value))
@@ -206,7 +308,7 @@ class QCInput(MSONable):
 
     @staticmethod
     def opt_template(opt):
-        opt_list = []
+        opt_list = list()
         opt_list.append("$opt")
         # loops over all opt sections
         for key, value in opt.items():
@@ -223,7 +325,7 @@ class QCInput(MSONable):
 
     @staticmethod
     def pcm_template(pcm):
-        pcm_list = []
+        pcm_list = list()
         pcm_list.append("$pcm")
         for key, value in pcm.items():
             pcm_list.append("   {key} {value}".format(key=key, value=value))
@@ -232,7 +334,7 @@ class QCInput(MSONable):
 
     @staticmethod
     def solvent_template(solvent):
-        solvent_list = []
+        solvent_list = list()
         solvent_list.append("$solvent")
         for key, value in solvent.items():
             solvent_list.append("   {key} {value}".format(
@@ -242,7 +344,7 @@ class QCInput(MSONable):
 
     @staticmethod
     def smx_template(smx):
-        smx_list = []
+        smx_list = list()
         smx_list.append("$smx")
         for key, value in smx.items():
             if value == "tetrahydrofuran":
@@ -273,18 +375,22 @@ class QCInput(MSONable):
             raise ValueError("Output file does not contain a rem section")
         return sections
 
-    @staticmethod
-    def read_molecule(string):
+    #TODO: Add option of multiple molecules
+    # Should this still be a staticmethod?
+    def read_molecule(self, string):
         charge = None
         spin_mult = None
         patterns = {
             "read": r"^\s*\$molecule\n\s*(read)",
+            "break": r"\s*\*{4}",
             "charge": r"^\s*\$molecule\n\s*((?:\-)*\d+)\s+\d",
             "spin_mult": r"^\s*\$molecule\n\s(?:\-)*\d+\s*(\d)"
         }
         matches = read_pattern(string, patterns)
         if "read" in matches.keys():
             return "read"
+        if "break" in matches.keys():
+            return self.read_multi_molecule(string)
         if "charge" in matches.keys():
             charge = float(matches["charge"][0][0])
         if "spin_mult" in matches.keys():
@@ -305,6 +411,77 @@ class QCInput(MSONable):
             coords=coords,
             charge=charge,
             spin_multiplicity=spin_mult)
+        return mol
+
+    @staticmethod
+    def read_multi_molecule(string):
+        mol = dict()
+
+        patterns = {
+            "charge": r"^\s*\$molecule\n\s*((?:\-)*\d+)\s+\d",
+            "spin_mult": r"^\s*\$molecule\n\s(?:\-)*\d+\s*(\d)"
+        }
+
+        header = r"^\s*\$molecule\n\s*(?:\-)*\d+\s*\d"
+        row = r"\s*((?i)[a-z]+)\s+([\d\-\.]+)\s+([\d\-\.]+)\s+([\d\-\.]+)"
+        footer = r"^\$end"
+
+        # Split string into reactants and products
+        string.replace(" ****", "$end\n****\n$molecule")
+        strings = string.split("\n****\n")
+        rct_string = strings[0]
+        pro_string = strings[1]
+
+        # Parse reactant molecule(s)
+        charge_rct = None
+        spin_mult_rct = None
+        matches_rct = read_pattern(rct_string, patterns)
+        if "charge" in matches_rct.keys():
+            charge_rct = float(matches_rct["charge"][0][0])
+        if "spin_mult" in matches_rct.keys():
+            spin_mult_rct = int(matches_rct["spin_mult"][0][0])
+        rct_table = read_table_pattern(
+            rct_string,
+            header_pattern=header,
+            row_pattern=row,
+            footer_pattern=footer)
+        species_rct = [val[0] for val in rct_table[0]]
+        coords_rct = [[float(val[1]), float(val[2]),
+                   float(val[3])] for val in rct_table[0]]
+
+        rct_mol = Molecule(
+            species=species_rct,
+            coords=coords_rct,
+            charge=charge_rct,
+            spin_multiplicity=spin_mult_rct)
+        rct_mg = MoleculeGraph.with_local_env_strategy(rct_mol, OpenBabelNN(),
+                                                       reorder=False,
+                                                       extend_structure=False)
+        mol["reactants"] = [r.molecule for r
+                            in rct_mg.get_disconnected_fragments()]
+
+        charge_pro = charge_rct
+        spin_mult_pro = spin_mult_rct
+        pro_table = read_table_pattern(
+            pro_string,
+            header_pattern=header,
+            row_pattern=row,
+            footer_pattern=footer)
+        species_pro = [val[0] for val in pro_table[0]]
+        coords_pro = [[float(val[1]), float(val[2]),
+                       float(val[3])] for val in rct_table[0]]
+
+        pro_mol = Molecule(
+            species=species_pro,
+            coords=coords_pro,
+            charge=charge_pro,
+            spin_multiplicity=spin_mult_pro)
+        pro_mg = MoleculeGraph.with_local_env_strategy(pro_mol, OpenBabelNN(),
+                                                       reorder=False,
+                                                       extend_structure=False)
+        mol["products"] = [p.molecule for p
+                            in pro_mg.get_disconnected_fragments()]
+
         return mol
 
     @staticmethod

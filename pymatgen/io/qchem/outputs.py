@@ -513,7 +513,6 @@ class QCOutput(MSONable):
                     Total_energy[ii] = float(val[0])
                 self.data["Total_energy_in_the_final_basis_set"] = Total_energy
 
-
     def _read_mulliken(self):
         """
         Parses Mulliken charges. Also parses spins given an unrestricted SCF.
@@ -644,7 +643,6 @@ class QCOutput(MSONable):
                 },
                 terminate_on_match=True).get('key') == [[]]:
             self.data["warnings"]["diagonalizing_BBt"] = True
-
 
     def _read_geometries(self):
         """
@@ -782,7 +780,6 @@ class QCOutput(MSONable):
             self.data["CDS_gradients"] = sorted_gradients
         else:
             self.data["CDS_gradients"] = None
-
 
     def _read_frequency_data(self):
         """
