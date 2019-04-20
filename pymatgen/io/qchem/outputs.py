@@ -24,7 +24,10 @@ except ImportError:
     ob = None
     have_babel = False
 
-from .utils import read_table_pattern, read_pattern, process_parsed_coords
+from .utils import (read_table_pattern,
+                    read_pattern,
+                    read_table_pattern_with_useful_header_footer,
+                    process_parsed_coords)
 
 __author__ = "Samuel Blau, Brandon Wood, Shyam Dwaraknath"
 __copyright__ = "Copyright 2018, The Materials Project"
@@ -329,7 +332,6 @@ class QCOutput(MSONable):
             terminate_on_match=True).get("key")
         if self.data.get("single_point_job", []):
             self._read_single_point_data()
-
 
         # If the calculation did not finish and no errors have been identified yet, check for other errors
         if not self.data.get('completion',
@@ -1063,6 +1065,55 @@ class QCOutput(MSONable):
         d["text"] = self.text
         d["filename"] = self.filename
         return jsanitize(d, strict=True)
+
+
+class QCVFileParser:
+    pass
+
+
+class QCStringfileParser:
+
+    def __init__(self, filename="stringfile.txt"):
+        self.filename = filename
+        self.data = dict()
+        self.text = str()
+
+        with zopen(filename, 'rt') as f:
+            self.text = f.read()
+
+        header_pattern = r"(?P<length>\d+)\s*\n\s*image\s+#\s+\d+\s+Energy\s+=\s+(?P<image_energy>[\-\.0-9]+)"
+        row_pattern = r"\s*\d+\s+([a-zA-Z]+)\s*([\d\-\.]+)\s*([\d\-\.]+)\s*([\d\-\.]+)\s*"
+        footer_pattern = r""
+
+        temp_data = read_table_pattern_with_useful_header_footer(self.text,
+                                                                 header_pattern=header_pattern,
+                                                                 row_pattern=row_pattern,
+                                                                 footer_pattern=footer_pattern)
+        headers = temp_data["header"]
+        bodies = temp_data["body"]
+
+        self.data["length"] = int(headers[0]["length"])
+        self.data["num_images"] = len(headers)
+        self.data["image_energies"] = list()
+        for header in headers:
+            self.data["image_energies"].append(float(header["image_energy"]))
+
+        self.data["geometries"] = list()
+        self.data["molecules"] = list()
+        for body in bodies:
+            species = list()
+            geometry = np.zeros(shape=(len(body), 3), dtype=float)
+            for ii, entry in enumerate(body):
+                species += [entry[0]]
+                for jj in range(3):
+                    geometry[ii, jj] = float(entry[jj + 1])
+            self.data["species"] = species
+            self.data["geometries"].append(geometry)
+            self.data["molecules"].append(Molecule(species=species,
+                                                   coords=geometry))
+
+class QCPerpGradFileParser:
+    pass
 
 
 def check_for_structure_changes(mol1, mol2):
