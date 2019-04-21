@@ -1068,7 +1068,34 @@ class QCOutput(MSONable):
 
 
 class QCVFileParser:
-    pass
+
+    def __init__(self, filename="Vfile.txt"):
+        self.filename = filename
+        self.data = dict()
+        self.text = str()
+
+        with zopen(filename, 'rt') as f:
+            self.text = f.read()
+
+        header_pattern = r"#\s+Energy\s+profile\s*"
+        row_pattern = r"\s*\d+\s+(?P<distance_abs>[0-9\.]+)\s+(?P<distance_prop>[01]\.[0-9]+)\s+(?P<energy_abs>[\-\.0-9]+)\s+(?P<energy_rel>[\-\.0-9]+)\s*"
+        footer_pattern = r""
+
+        temp_data = read_table_pattern(self.text,
+                                       header_pattern=header_pattern,
+                                       row_pattern=row_pattern,
+                                       footer_pattern=footer_pattern)
+
+        self.data["num_images"] = len(temp_data[0])
+        self.data["absolute_distances"] = list()
+        self.data["proportional_distances"] = list()
+        self.data["image_energies"] = list()
+        self.data["relative_energies"] = list()
+        for row in temp_data[0]:
+            self.data["absolute_distances"].append(row["distance_abs"])
+            self.data["proportional_distances"].append(row["distance_prop"])
+            self.data["image_energies"].append(row["energy_abs"])
+            self.data["relative_energies"].append(row["energy_rel"])
 
 
 class QCStringfileParser:
