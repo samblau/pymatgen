@@ -333,6 +333,15 @@ class QCOutput(MSONable):
         if self.data.get("single_point_job", []):
             self._read_single_point_data()
 
+        self.data["freezing_string_job"] = read_pattern(
+            self.text, {
+                "key": r"(?i)\s*job(?:_)*type\s*(?:=)*\s*fsm"
+            },
+            terminate_on_match=True).get("key")
+        if self.data.get("freezing_string_job", []):
+            self._read_freezing_string_data()
+            self._read_geometries()
+
         # If the calculation did not finish and no errors have been identified yet, check for other errors
         if not self.data.get('completion',
                              []) and self.data.get("errors") == []:
@@ -923,12 +932,58 @@ class QCOutput(MSONable):
                     r"\s*SCF\s+energy in the final basis set\s+=\s*([\d\-\.]+)"
             })
 
-        if temp_dict.get('final_energy') == None:
+        if temp_dict.get('final_energy') is None:
             self.data['final_energy'] = None
         else:
             # -1 in case of pcm
             # Two lines will match the above; we want final calculation
             self.data['final_energy'] = float(temp_dict.get('final_energy')[-1][0])
+
+    def _read_freezing_string_data(self):
+        """
+        Parses outputs from freezing-string method (FSM) calculations. This
+        includes values in this output file, as well as in auxilliary files
+        (Vfile.txt, perp_grad_file.txt, and stringfile.txt).
+        """
+
+        vfile = QCVFileParser()
+        perp_grad_file = QCPerpGradFileParser()
+        stringfile = QCStringfileParser()
+
+        self.data["num_images"] = stringfile.data["num_images"]
+
+        images = list()
+        for ii in range(self.data["num_images"]):
+            image = dict()
+            image["energy"] = stringfile.data["image_energies"][ii]
+            image["geometry"] = stringfile.data["geometries"][ii]
+            image["molecules"] = stringfile.data["molecules"][ii]
+            image["species"] = stringfile.data["species"]
+            image["absolute_distance"] = vfile.data["absolute_distances"][ii]
+            image["proportional_distance"] = vfile.data["proportional_distances"][ii]
+            image["relative_energy"] = vfile.data["relative_energies"][ii]
+            image["gradient_magnitude"] = perp_grad_file.data["gradient_magnitudes"][ii]
+            images.append(image)
+
+        self.data["string_images"] = images
+
+        temp_dict = read_pattern(
+            self.text, {
+                "max_energy":
+                    r"\s*E_max:\s+([\d\-\.]+)\s*",
+                "final_energy":
+                    r"\s*Energy\s+is\s+([\d\-\.]+)\s*"
+            })
+
+        if temp_dict.get("max_energy") is None:
+            self.data["max_energy_string"] = None
+        else:
+            self.data["max_energy_string"] = float(temp_dict.get("max_energy")[0][0])
+
+        if temp_dict.get("final_energy") is None:
+            self.data["final_energy"] = None
+        else:
+            self.data["final_energy"] = float(temp_dict.get("final_energy")[0][0])
 
     def _read_pcm_information(self):
         """
@@ -1097,6 +1152,13 @@ class QCVFileParser:
             self.data["image_energies"].append(row["energy_abs"])
             self.data["relative_energies"].append(row["energy_rel"])
 
+    def as_dict(self):
+        d = {}
+        d["data"] = self.data
+        d["text"] = self.text
+        d["filename"] = self.filename
+        return jsanitize(d, strict=True)
+
 
 class QCStringfileParser:
 
@@ -1145,6 +1207,14 @@ class QCStringfileParser:
             self.data["molecules"].append(Molecule(species=species,
                                                    coords=geometry))
 
+    def as_dict(self):
+        d = {}
+        d["data"] = self.data
+        d["text"] = self.text
+        d["filename"] = self.filename
+        return jsanitize(d, strict=True)
+
+
 class QCPerpGradFileParser:
 
     def __init__(self, filename="perp_grad_file.txt"):
@@ -1172,6 +1242,13 @@ class QCPerpGradFileParser:
             self.data["absolute_distances"].append(row["distance_abs"])
             self.data["proportional_distances"].append(row["distance_prop"])
             self.data["gradient_magnitudes"].append(row["grad_mag"])
+
+    def as_dict(self):
+        d = {}
+        d["data"] = self.data
+        d["text"] = self.text
+        d["filename"] = self.filename
+        return jsanitize(d, strict=True)
 
 
 def check_for_structure_changes(mol1, mol2):
