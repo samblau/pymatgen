@@ -164,6 +164,38 @@ class OptSet(QChemDictSet):
             overwrite_inputs=overwrite_inputs)
 
 
+class TransitionStateSet(QChemDictSet):
+    """
+    QChemDictSet for a transition-state search
+    """
+
+    def __init__(self,
+                 molecule,
+                 dft_rung=4,
+                 basis_set="6-311++G*",
+                 pcm_dielectric=None,
+                 smd_solvent=None,
+                 scf_algorithm="diis_gdm",
+                 max_scf_cycles=200,
+                 geom_opt_max_cycles=200,
+                 overwrite_inputs=None):
+        self.basis_set = basis_set
+        self.scf_algorithm = scf_algorithm
+        self.max_scf_cycles = max_scf_cycles
+        self.geom_opt_max_cycles = geom_opt_max_cycles
+        super(TransitionStateSet, self).__init__(
+            molecule=molecule,
+            job_type="ts",
+            dft_rung=dft_rung,
+            pcm_dielectric=pcm_dielectric,
+            smd_solvent=smd_solvent,
+            basis_set=self.basis_set,
+            scf_algorithm=self.scf_algorithm,
+            max_scf_cycles=self.max_scf_cycles,
+            geom_opt_max_cycles=self.geom_opt_max_cycles,
+            overwrite_inputs=overwrite_inputs)
+
+
 class SinglePointSet(QChemDictSet):
     """
     QChemDictSet for a single point calculation
@@ -219,4 +251,36 @@ class FreqSet(QChemDictSet):
             basis_set=self.basis_set,
             scf_algorithm=self.scf_algorithm,
             max_scf_cycles=self.max_scf_cycles,
+            overwrite_inputs=overwrite_inputs)
+
+
+class FreezingStringSet(QChemDictSet):
+    """
+    QChemDictSet for a transition-state search
+    """
+
+    def __init__(self,
+                 molecule,
+                 dft_rung=4,
+                 basis_set="6-311++G*",
+                 pcm_dielectric=None,
+                 smd_solvent=None,
+                 scf_algorithm="diis_gdm",
+                 max_scf_cycles=200,
+                 geom_opt_max_cycles=200,
+                 overwrite_inputs=None):
+        self.basis_set = basis_set
+        self.scf_algorithm = scf_algorithm
+        self.max_scf_cycles = max_scf_cycles
+        self.geom_opt_max_cycles = geom_opt_max_cycles
+        super(FreezingStringSet, self).__init__(
+            molecule=molecule,
+            job_type="fsm",
+            dft_rung=dft_rung,
+            pcm_dielectric=pcm_dielectric,
+            smd_solvent=smd_solvent,
+            basis_set=self.basis_set,
+            scf_algorithm=self.scf_algorithm,
+            max_scf_cycles=self.max_scf_cycles,
+            geom_opt_max_cycles=self.geom_opt_max_cycles,
             overwrite_inputs=overwrite_inputs)
