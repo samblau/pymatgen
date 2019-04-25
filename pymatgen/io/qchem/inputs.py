@@ -276,8 +276,8 @@ class QCInput(MSONable):
                 pro.translate_sites(vector=np.array([pro_dist_sum + diameter + 1
                                                      for _ in range(3)]))
 
-        total_charge = int(sum([mol.charge for mol in reactants]))
-        total_spin = sum([mol.spin_multiplicity for mol in reactants])
+        total_charge = int(sum([mol.charge for mol in products]))
+        total_spin = sum([mol.spin_multiplicity for mol in products])
         mol_list.append(" {charge} {spin_mult}".format(
             charge=total_charge,
             spin_mult=total_spin))
@@ -375,9 +375,8 @@ class QCInput(MSONable):
             raise ValueError("Output file does not contain a rem section")
         return sections
 
-    #TODO: Add option of multiple molecules
-    # Should this still be a staticmethod?
-    def read_molecule(self, string):
+    @classmethod
+    def read_molecule(cls, string):
         charge = None
         spin_mult = None
         patterns = {
@@ -390,7 +389,7 @@ class QCInput(MSONable):
         if "read" in matches.keys():
             return "read"
         if "break" in matches.keys():
-            return self.read_multi_molecule(string)
+            return cls.read_multi_molecule(string)
         if "charge" in matches.keys():
             charge = float(matches["charge"][0][0])
         if "spin_mult" in matches.keys():
@@ -417,32 +416,30 @@ class QCInput(MSONable):
     def read_multi_molecule(string):
         mol = dict()
 
+        # NOTE: We avoid the issue of spin multiplicity assignment
         patterns = {
             "charge": r"^\s*\$molecule\n\s*((?:\-)*\d+)\s+\d",
-            "spin_mult": r"^\s*\$molecule\n\s(?:\-)*\d+\s*(\d)"
         }
 
-        header = r"^\s*\$molecule\n\s*(?:\-)*\d+\s*\d"
+        header_rct = r"^\s*\$molecule\n\s*(?:\-)*\d+\s*\d"
+        header_pro = r"^\s*\$molecule\s+"
         row = r"\s*((?i)[a-z]+)\s+([\d\-\.]+)\s+([\d\-\.]+)\s+([\d\-\.]+)"
-        footer = r"^\$end"
+        footer = r"^\$end\s*"
 
         # Split string into reactants and products
-        string.replace(" ****", "$end\n****\n$molecule")
+        string = string.replace(" ****", "$end\n****\n$molecule")
         strings = string.split("\n****\n")
         rct_string = strings[0]
         pro_string = strings[1]
 
         # Parse reactant molecule(s)
         charge_rct = None
-        spin_mult_rct = None
         matches_rct = read_pattern(rct_string, patterns)
         if "charge" in matches_rct.keys():
-            charge_rct = float(matches_rct["charge"][0][0])
-        if "spin_mult" in matches_rct.keys():
-            spin_mult_rct = int(matches_rct["spin_mult"][0][0])
+            charge_rct = int(matches_rct["charge"][0][0])
         rct_table = read_table_pattern(
             rct_string,
-            header_pattern=header,
+            header_pattern=header_rct,
             row_pattern=row,
             footer_pattern=footer)
         species_rct = [val[0] for val in rct_table[0]]
@@ -452,19 +449,18 @@ class QCInput(MSONable):
         rct_mol = Molecule(
             species=species_rct,
             coords=coords_rct,
-            charge=charge_rct,
-            spin_multiplicity=spin_mult_rct)
+            charge=charge_rct)
         rct_mg = MoleculeGraph.with_local_env_strategy(rct_mol, OpenBabelNN(),
                                                        reorder=False,
                                                        extend_structure=False)
         mol["reactants"] = [r.molecule for r
                             in rct_mg.get_disconnected_fragments()]
+        print(mol["reactants"])
 
         charge_pro = charge_rct
-        spin_mult_pro = spin_mult_rct
         pro_table = read_table_pattern(
             pro_string,
-            header_pattern=header,
+            header_pattern=header_pro,
             row_pattern=row,
             footer_pattern=footer)
         species_pro = [val[0] for val in pro_table[0]]
@@ -474,8 +470,7 @@ class QCInput(MSONable):
         pro_mol = Molecule(
             species=species_pro,
             coords=coords_pro,
-            charge=charge_pro,
-            spin_multiplicity=spin_mult_pro)
+            charge=charge_pro)
         pro_mg = MoleculeGraph.with_local_env_strategy(pro_mol, OpenBabelNN(),
                                                        reorder=False,
                                                        extend_structure=False)
