@@ -43,9 +43,9 @@ $end"""
         self.assertEqual(molecule_actual, molecule_test)
 
     def test_multi_molecule_template(self):
-        rct_1 = Molecule.from_file(os.path.join(test_dir, "furan.mol"))
-        rct_2 = Molecule.from_file(os.path.join(test_dir, "maleimide.mol"))
-        pro = Molecule.from_file(os.path.join(test_dir, "product.mol"))
+        rct_1 = Molecule.from_file(os.path.join(test_dir, "furan.xyz"))
+        rct_2 = Molecule.from_file(os.path.join(test_dir, "maleimide.xyz"))
+        pro = Molecule.from_file(os.path.join(test_dir, "product.xyz"))
 
         molecule_test = QCInput.multi_molecule_template({"reactants": [rct_1,
                                                                        rct_2],
@@ -259,9 +259,9 @@ $end"""
         molecule_test = QCInput.read_multi_molecule(str_molecule)
         print(molecule_test)
 
-        rct_1 = Molecule.from_file(os.path.join(test_dir, "furan.mol"))
-        rct_2 = Molecule.from_file(os.path.join(test_dir, "maleimide.mol"))
-        pro = Molecule.from_file(os.path.join(test_dir, "product.mol"))
+        rct_1 = Molecule.from_file(os.path.join(test_dir, "furan.xyz"))
+        rct_2 = Molecule.from_file(os.path.join(test_dir, "maleimide.xyz"))
+        pro = Molecule.from_file(os.path.join(test_dir, "product.xyz"))
 
         molecule_actual = {"reactants": [rct_1, rct_2],
                            "products": [pro]}

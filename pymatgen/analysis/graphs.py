@@ -2018,7 +2018,7 @@ class MoleculeGraph(MSONable):
                 # create new MoleculeGraph
                 sub_mols.append(MoleculeGraph(new_mol, graph_data=graph_data))
 
-                return sub_mols
+            return sub_mols
 
     def split_molecule_subgraphs(self, bonds, allow_reverse=False,
                                  alterations=None):

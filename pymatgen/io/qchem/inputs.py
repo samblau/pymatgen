@@ -9,7 +9,7 @@ from monty.json import MSONable
 from monty.io import zopen
 from pymatgen.core import Molecule
 from pymatgen.analysis.graphs import MoleculeGraph
-from pymatgen.analysis.local_env import OpenBabelNN
+from pymatgen.analysis.local_env import CovalentBondNN
 from .utils import read_table_pattern, read_pattern, lower_and_check_unique
 
 # Classes for reading/manipulating/writing QChem ouput files.
@@ -422,7 +422,7 @@ class QCInput(MSONable):
         }
 
         header_rct = r"^\s*\$molecule\n\s*(?:\-)*\d+\s*\d"
-        header_pro = r"^\s*\$molecule\s+"
+        header_pro = r"^\s*\$molecule\s*"
         row = r"\s*((?i)[a-z]+)\s+([\d\-\.]+)\s+([\d\-\.]+)\s+([\d\-\.]+)"
         footer = r"^\$end\s*"
 
@@ -450,12 +450,12 @@ class QCInput(MSONable):
             species=species_rct,
             coords=coords_rct,
             charge=charge_rct)
-        rct_mg = MoleculeGraph.with_local_env_strategy(rct_mol, OpenBabelNN(),
+        rct_mg = MoleculeGraph.with_local_env_strategy(rct_mol, CovalentBondNN(),
                                                        reorder=False,
                                                        extend_structure=False)
+
         mol["reactants"] = [r.molecule for r
                             in rct_mg.get_disconnected_fragments()]
-        print(mol["reactants"])
 
         charge_pro = charge_rct
         pro_table = read_table_pattern(
@@ -465,17 +465,16 @@ class QCInput(MSONable):
             footer_pattern=footer)
         species_pro = [val[0] for val in pro_table[0]]
         coords_pro = [[float(val[1]), float(val[2]),
-                       float(val[3])] for val in rct_table[0]]
+                       float(val[3])] for val in pro_table[0]]
 
         pro_mol = Molecule(
             species=species_pro,
             coords=coords_pro,
             charge=charge_pro)
-        pro_mg = MoleculeGraph.with_local_env_strategy(pro_mol, OpenBabelNN(),
+        pro_mg = MoleculeGraph.with_local_env_strategy(pro_mol, CovalentBondNN(),
                                                        reorder=False,
                                                        extend_structure=False)
-        mol["products"] = [p.molecule for p
-                            in pro_mg.get_disconnected_fragments()]
+        mol["products"] = [p.molecule for p in pro_mg.get_disconnected_fragments()]
 
         return mol
 
