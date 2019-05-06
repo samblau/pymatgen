@@ -93,7 +93,7 @@ class QChemDictSet(QCInput):
         else:
             raise ValueError("dft_rung should be between 1 and 5!")
 
-        if self.job_type.lower() == "opt":
+        if self.job_type.lower() in ["opt", "ts"]:
             myrem["geom_opt_max_cycles"] = self.geom_opt_max_cycles
 
         if self.pcm_dielectric is not None and self.smd_solvent is not None:
