@@ -946,9 +946,13 @@ class QCOutput(MSONable):
         (Vfile.txt, perp_grad_file.txt, and stringfile.txt).
         """
 
-        vfile = QCVFileParser()
-        perp_grad_file = QCPerpGradFileParser()
-        stringfile = QCStringfileParser()
+        dirname = os.path.dirname(self.filename)
+
+        vfile = QCVFileParser(filename=os.path.join(dirname, "Vfile.txt"))
+        perp_grad_file = QCPerpGradFileParser(filename=os.path.join(dirname,
+                                                                    "perp_grad_file.txt"))
+        stringfile = QCStringfileParser(filename=os.path.join(dirname,
+                                                              "stringfile.txt"))
 
         self.data["num_images"] = stringfile.data["num_images"]
 
@@ -1147,10 +1151,10 @@ class QCVFileParser:
         self.data["image_energies"] = list()
         self.data["relative_energies"] = list()
         for row in temp_data[0]:
-            self.data["absolute_distances"].append(row["distance_abs"])
-            self.data["proportional_distances"].append(row["distance_prop"])
-            self.data["image_energies"].append(row["energy_abs"])
-            self.data["relative_energies"].append(row["energy_rel"])
+            self.data["absolute_distances"].append(float(row["distance_abs"]))
+            self.data["proportional_distances"].append(float(row["distance_prop"]))
+            self.data["image_energies"].append(float(row["energy_abs"]))
+            self.data["relative_energies"].append(float(row["energy_rel"]))
 
     def as_dict(self):
         d = {}
@@ -1225,8 +1229,8 @@ class QCPerpGradFileParser:
         with zopen(filename, 'rt') as f:
             self.text = f.read()
 
-        header_pattern = r"\s*perp_grad\s+magnitudes\s*"
-        row_pattern = r"\s*\d+\s+(?P<distance_abs>[0-9\.]+)\s+(?P<distance_prop>[01]\.[0-9]+)\s+(?P<grad_mag>[\.0-9]+)\s*"
+        header_pattern = r"\s*#\s*perp_grad\s+magnitudes\s*"
+        row_pattern = r"\s*\d+\s+(?P<distance_abs>[0-9\.]+)\s+(?P<distance_prop>[01]\.[0-9]+)\s+(?P<grad_mag>[\.\-na0-9]+)\s*"
         footer_pattern = r""
 
         temp_data = read_table_pattern(self.text,
@@ -1239,9 +1243,13 @@ class QCPerpGradFileParser:
         self.data["proportional_distances"] = list()
         self.data["gradient_magnitudes"] = list()
         for row in temp_data[0]:
-            self.data["absolute_distances"].append(row["distance_abs"])
-            self.data["proportional_distances"].append(row["distance_prop"])
-            self.data["gradient_magnitudes"].append(row["grad_mag"])
+            if "nan" in row["grad_mag"]:
+                grad_mag = math.inf
+            else:
+                grad_mag = float(row["grad_mag"])
+            self.data["absolute_distances"].append(float(row["distance_abs"]))
+            self.data["proportional_distances"].append(float(row["distance_prop"]))
+            self.data["gradient_magnitudes"].append(grad_mag)
 
     def as_dict(self):
         d = {}
