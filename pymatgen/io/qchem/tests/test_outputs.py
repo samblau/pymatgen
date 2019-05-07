@@ -4,10 +4,14 @@
 
 
 import os
+import math
 import unittest
 
 from monty.serialization import loadfn, dumpfn
-from pymatgen.io.qchem.outputs import QCOutput
+from pymatgen.io.qchem.outputs import (QCOutput,
+                                       QCStringfileParser,
+                                       QCPerpGradFileParser,
+                                       QCVFileParser)
 from pymatgen.util.testing import PymatgenTest
 try:
     import openbabel
@@ -201,6 +205,134 @@ class TestQCOutput(PymatgenTest):
         for key in property_list:
             print('Testing ', key)
             self._test_property(key, single_outs, multi_outs)
+
+
+class QCVfileParserTest(PymatgenTest):
+
+    def test_init(self):
+        filename = os.path.join(test_dir, "new_qchem_files", "Vfile.txt")
+
+        with open(filename) as vfile:
+            text = vfile.read()
+
+        absolute_distances = [0.0, 1.07482, 2.21674, 3.29777, 4.41737, 5.54168,
+                              6.59763, 7.70808, 8.80552, 9.86112, 10.88407,
+                              11.94403, 13.00584, 14.02017, 14.26367, 16.13259,
+                              17.17187, 18.21893, 19.26674, 20.29805, 21.37902,
+                              22.43943, 23.55714, 24.63218, 25.77714, 26.84866,
+                              27.93978, 29.03211, 30.11024]
+
+        image_energies = [-1030.16113, -1030.16343, -1030.14377, -1030.13744,
+                          -1030.13427, -1030.13045, -1030.10962, -1030.10316,
+                          -1030.09018, -1030.06736, -1030.03444, -1029.98983,
+                          -1029.9469, -1029.92152, -1029.92659, -1029.93749,
+                          -1029.96343, -1030.00691, -1030.04057, -1030.06393,
+                          -1030.07394, -1030.07758, -1030.08325, -1030.08465,
+                          -1030.07883, -1030.06548, -1030.06812, -1030.14984,
+                          -1030.22144]
+
+        proportional_distances = [0.0, 0.0357, 0.07362, 0.10952, 0.14671,
+                                  0.18405, 0.21912, 0.256, 0.29244, 0.3275,
+                                  0.36147, 0.39668, 0.43194, 0.46563, 0.47371,
+                                  0.53578, 0.5703, 0.60507, 0.63987, 0.67412,
+                                  0.71002, 0.74524, 0.78236, 0.81807, 0.85609,
+                                  0.89168, 0.92792, 0.96419, 1.0]
+
+        relative_energies = [0.0, -1.44895, 10.89212, 14.86526, 16.84923,
+                             19.24933, 32.32105, 36.37664, 44.51746, 58.83892,
+                             79.4976, 107.49213, 134.42978, 150.35218,
+                             147.17553, 140.33325, 124.05361, 96.76958,
+                             75.64735, 60.99272, 54.7079, 52.42574, 48.87046,
+                             47.98997, 51.64355, 60.01858, 58.3643, 7.08018,
+                             -37.84533]
+
+        parsed = QCVFileParser(filename=filename)
+
+        self.assertEqual(parsed.filename, filename)
+        self.assertEqual(parsed.text, text)
+        self.assertEqual(parsed.data["num_images"], 29)
+        self.assertSequenceEqual(parsed.data["absolute_distances"],
+                                 absolute_distances)
+        self.assertSequenceEqual(parsed.data["image_energies"], image_energies)
+        self.assertSequenceEqual(parsed.data["proportional_distances"],
+                                 proportional_distances)
+        self.assertSequenceEqual(parsed.data["relative_energies"],
+                                 relative_energies)
+
+
+class QCStringfileParserTest(PymatgenTest):
+
+    def test_init(self):
+        filename = os.path.join(test_dir, "new_qchem_files", "stringfile.txt")
+
+        # To generate JSON - uncomment if/when changes need to be made
+        # data = QCStringfileParser(filename).data
+        # dumpfn(data, "frozen_strings.json")
+
+        # To load JSON
+        frozen_string_dict = loadfn(os.path.join(
+            os.path.dirname(__file__), "frozen_strings.json"))
+
+        with open(filename) as stringfile:
+            text = stringfile.read()
+
+        parsed = QCStringfileParser(filename)
+
+        self.assertEqual(parsed.filename, filename)
+        self.assertEqual(parsed.text, text)
+
+        keys = ["num_images", "length", "image_energies", "species",
+                "geometries", "molecules"]
+        for key in keys:
+            try:
+                self.assertEqual(parsed.data.get(key),
+                                 frozen_string_dict.get(key))
+            except ValueError:
+                self.assertArrayEqual(parsed.data.get(key),
+                                      frozen_string_dict.get(key))
+
+
+class QCPerpGradFileParserTest(PymatgenTest):
+
+    def test_init(self):
+        filename = os.path.join(test_dir, "new_qchem_files",
+                                "perp_grad_file.txt")
+
+        with open(filename) as perp_grad_file:
+            text = perp_grad_file.read()
+
+        absolute_distances = [0.0, 1.07482, 2.21674, 3.29777, 4.41737, 5.54168,
+                              6.59763, 7.70808, 8.80552, 9.86112, 10.88407,
+                              11.94403, 13.00584, 14.02017, 14.26367, 16.13259,
+                              17.17187, 18.21893, 19.26674, 20.29805, 21.37902,
+                              22.43943, 23.55714, 24.63218, 25.77714, 26.84866,
+                              27.93978, 29.03211, 30.11024]
+
+        proportional_distances = [0.0, 0.0357, 0.07362, 0.10952, 0.14671,
+                                  0.18405, 0.21912, 0.256, 0.29244, 0.3275,
+                                  0.36147, 0.39668, 0.43194, 0.46563, 0.47371,
+                                  0.53578, 0.5703, 0.60507, 0.63987, 0.67412,
+                                  0.71002, 0.74524, 0.78236, 0.81807, 0.85609,
+                                  0.89168, 0.92792, 0.96419, 1.0]
+
+        gradient_magnitudes = [math.inf, 0.10157, 0.22465, 0.19255, 0.13654,
+                               0.11796, 0.18782, 0.18502, 0.17487, 0.20797,
+                               0.25543, 0.34664, 0.38776, 0.42603, 0.36126,
+                               0.38034, 0.36734, 0.29388, 0.24044, 0.16646,
+                               0.17634, 0.1228, 0.11449, 0.18048, 0.21151,
+                               0.29764, 0.23548, 0.15584, math.inf]
+
+        parsed = QCPerpGradFileParser(filename=filename)
+
+        self.assertEqual(parsed.filename, filename)
+        self.assertEqual(parsed.text, text)
+        self.assertEqual(parsed.data["num_images"], 29)
+        self.assertSequenceEqual(parsed.data["absolute_distances"],
+                                 absolute_distances)
+        self.assertSequenceEqual(parsed.data["proportional_distances"],
+                                 proportional_distances)
+        self.assertSequenceEqual(parsed.data["gradient_magnitudes"],
+                                 gradient_magnitudes)
 
 
 if __name__ == "__main__":

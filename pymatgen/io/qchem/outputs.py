@@ -948,11 +948,17 @@ class QCOutput(MSONable):
 
         dirname = os.path.dirname(self.filename)
 
-        vfile = QCVFileParser(filename=os.path.join(dirname, "Vfile.txt"))
-        perp_grad_file = QCPerpGradFileParser(filename=os.path.join(dirname,
+        try:
+            vfile = QCVFileParser(filename=os.path.join(dirname, "Vfile.txt"))
+            perp_grad_file = QCPerpGradFileParser(filename=os.path.join(dirname,
                                                                     "perp_grad_file.txt"))
-        stringfile = QCStringfileParser(filename=os.path.join(dirname,
+            stringfile = QCStringfileParser(filename=os.path.join(dirname,
                                                               "stringfile.txt"))
+        except FileNotFoundError:
+            raise RuntimeError("Frezing string output files stringfile.txt,"
+                               " Vfile.txt, and perp_grad_file.txt were not"
+                               " located in the same directory as the output"
+                               " file.")
 
         self.data["num_images"] = stringfile.data["num_images"]
 
