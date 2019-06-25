@@ -293,7 +293,7 @@ class FreezingStringSet(QChemDictSet):
                  basis_set="6-311++G*",
                  pcm_dielectric=None,
                  smd_solvent=None,
-                 custom_smd=None
+                 custom_smd=None,
                  scf_algorithm="diis_gdm",
                  max_scf_cycles=200,
                  geom_opt_max_cycles=200,
