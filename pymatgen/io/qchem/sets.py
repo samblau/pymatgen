@@ -296,12 +296,10 @@ class FreezingStringSet(QChemDictSet):
                  custom_smd=None,
                  scf_algorithm="diis_gdm",
                  max_scf_cycles=200,
-                 geom_opt_max_cycles=200,
                  overwrite_inputs=None):
         self.basis_set = basis_set
         self.scf_algorithm = scf_algorithm
         self.max_scf_cycles = max_scf_cycles
-        self.geom_opt_max_cycles = geom_opt_max_cycles
         super(FreezingStringSet, self).__init__(
             molecule=molecule,
             job_type="fsm",
@@ -312,5 +310,4 @@ class FreezingStringSet(QChemDictSet):
             basis_set=self.basis_set,
             scf_algorithm=self.scf_algorithm,
             max_scf_cycles=self.max_scf_cycles,
-            geom_opt_max_cycles=self.geom_opt_max_cycles,
             overwrite_inputs=overwrite_inputs)
