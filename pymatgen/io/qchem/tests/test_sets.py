@@ -154,7 +154,7 @@ class QChemDictSetTest(PymatgenTest):
 
     def test_pcm_write(self):
         test_molecule = QCInput.from_file(
-            os.path.join(test_dir, "new_qchem_files/pcm.qin")).molecule
+            os.path.join(mol_dir, "new_qchem_files/pcm.qin")).molecule
         dict_set = QChemDictSet(molecule=test_molecule,
                                 job_type='opt',
                                 basis_set='6-31g*',
@@ -189,7 +189,7 @@ class QChemDictSetTest(PymatgenTest):
 
     def test_smd_write(self):
         test_molecule = QCInput.from_file(
-            os.path.join(test_dir, "new_qchem_files/pcm.qin")).molecule
+            os.path.join(mol_dir, "new_qchem_files/pcm.qin")).molecule
         dict_set = QChemDictSet(molecule=test_molecule,
                                 job_type='opt',
                                 basis_set='6-31g*',
@@ -218,7 +218,7 @@ class QChemDictSetTest(PymatgenTest):
 
     def test_custom_smd_write(self):
         test_molecule = QCInput.from_file(
-            os.path.join(test_dir, "new_qchem_files/pcm.qin")).molecule
+            os.path.join(mol_dir, "new_qchem_files/pcm.qin")).molecule
         dict_set = QChemDictSet(molecule=test_molecule,
                                 job_type='opt',
                                 basis_set='6-31g*',

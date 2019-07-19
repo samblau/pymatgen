@@ -257,7 +257,6 @@ $end"""
 $end"""
 
         molecule_test = QCInput.read_multi_molecule(str_molecule)
-        print(molecule_test)
 
         rct_1 = Molecule.from_file(os.path.join(test_dir, "furan.xyz"))
         rct_2 = Molecule.from_file(os.path.join(test_dir, "maleimide.xyz"))
