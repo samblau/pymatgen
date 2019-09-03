@@ -580,7 +580,7 @@ class Node(metaclass=abc.ABCMeta):
             if self.is_task:
                 try:
                     return self.pos_str
-                except:
+                except Exception:
                     return os.path.basename(self.workdir)
             else:
                 return os.path.basename(self.workdir)
@@ -700,7 +700,7 @@ class Node(metaclass=abc.ABCMeta):
             deps: List of :class:`Dependency` objects specifying the dependencies of the node.
                   or dictionary mapping nodes to file extensions e.g. {task: "DEN"}
         """
-        if isinstance(deps, collections.Mapping):
+        if isinstance(deps, collections.abc.Mapping):
             # Convert dictionary into list of dependencies.
             deps = [Dependency(node, exts) for node, exts in deps.items()]
 
@@ -1146,7 +1146,7 @@ class HistoryRecord:
         if self.args:
             try:
                 msg = msg % self.args
-            except:
+            except Exception:
                 msg += str(self.args)
 
         if asctime: msg = "[" + self.asctime + "] " + msg

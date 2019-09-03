@@ -82,18 +82,21 @@ class QChemDictSet(QCInput):
         myrem["gen_scfman"] = "true"
         myrem["xc_grid"] = "3"
         myrem["scf_algorithm"] = self.scf_algorithm
+        myrem["resp_charges"] = "true"
+        myrem["symmetry"] = "false"
+        myrem["sym_ignore"] = "true"
 
         if self.dft_rung == 1:
-            myrem["exchange"] = "B3LYP"
+            myrem["method"] = "b3lyp"
         elif self.dft_rung == 2:
-            myrem["method"] = "B97-D3"
+            myrem["method"] = "b3lyp"
             myrem["dft_D"] = "D3_BJ"
         elif self.dft_rung == 3:
-            myrem["method"] = "B97M-rV"
-        elif self.dft_rung == 4:
             myrem["method"] = "wb97xd"
+        elif self.dft_rung == 4:
+            myrem["method"] = "wb97xv"
         elif self.dft_rung == 5:
-            myrem["method"] = "wB97M-V"
+            myrem["method"] = "wb97mv"
         else:
             raise ValueError("dft_rung should be between 1 and 5!")
 
@@ -116,7 +119,7 @@ class QChemDictSet(QCInput):
             myrem["solvent_method"] = "smd"
             myrem["ideriv"] = "1"
             if self.smd_solvent == "custom" or self.smd_solvent == "other":
-                if self.custom_smd == None:
+                if self.custom_smd is None:
                     raise ValueError(
                         'A user-defined SMD requires passing custom_smd, a string' +
                         ' of seven comma separated values in the following order:' +
@@ -148,7 +151,7 @@ class QChemDictSet(QCInput):
     def write(self, input_file):
         self.write_file(input_file)
         if self.smd_solvent == "custom" or self.smd_solvent == "other":
-            with zopen(os.path.join(os.path.dirname(input_file),"solvent_data"), 'wt') as f:
+            with zopen(os.path.join(os.path.dirname(input_file), "solvent_data"), 'wt') as f:
                 f.write(self.custom_smd)
 
 
@@ -159,12 +162,12 @@ class OptSet(QChemDictSet):
 
     def __init__(self,
                  molecule,
-                 dft_rung=4,
-                 basis_set="6-311++G*",
+                 dft_rung=3,
+                 basis_set="def2-tzvppd",
                  pcm_dielectric=None,
                  smd_solvent=None,
                  custom_smd=None,
-                 scf_algorithm="diis_gdm",
+                 scf_algorithm="diis",
                  max_scf_cycles=200,
                  geom_opt_max_cycles=200,
                  overwrite_inputs=None):
@@ -227,12 +230,12 @@ class SinglePointSet(QChemDictSet):
 
     def __init__(self,
                  molecule,
-                 dft_rung=4,
-                 basis_set="6-311++G*",
+                 dft_rung=3,
+                 basis_set="def2-tzvppd",
                  pcm_dielectric=None,
                  smd_solvent=None,
                  custom_smd=None,
-                 scf_algorithm="diis_gdm",
+                 scf_algorithm="diis",
                  max_scf_cycles=200,
                  overwrite_inputs=None):
         self.basis_set = basis_set
@@ -258,12 +261,12 @@ class FreqSet(QChemDictSet):
 
     def __init__(self,
                  molecule,
-                 dft_rung=4,
-                 basis_set="6-311++G*",
+                 dft_rung=3,
+                 basis_set="def2-tzvppd",
                  pcm_dielectric=None,
                  smd_solvent=None,
                  custom_smd=None,
-                 scf_algorithm="diis_gdm",
+                 scf_algorithm="diis",
                  max_scf_cycles=200,
                  overwrite_inputs=None):
         self.basis_set = basis_set
