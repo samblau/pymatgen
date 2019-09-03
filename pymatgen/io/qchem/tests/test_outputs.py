@@ -88,8 +88,8 @@ property_list = {"errors",
                  "pcm_gradients",
                  "CDS_gradients",
                  "RESP",
-                 "trans_dip"}
-                 "num_images"
+                 "trans_dip",
+                 "num_images",
                  "string_images",
                  "max_energy_string"}
 

@@ -311,6 +311,7 @@ class QCOutput(MSONable):
         if self.data.get("freezing_string_job", []):
             self._read_freezing_string_data()
             self._read_geometries()
+
         self.data["force_job"] = read_pattern(
             self.text, {
                 "key": r"(?i)\s*job(?:_)*type\s*(?:=)*\s*force"
