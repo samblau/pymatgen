@@ -10,10 +10,9 @@ from monty.io import zopen
 from pymatgen.core import Molecule
 from pymatgen.analysis.graphs import MoleculeGraph
 from pymatgen.analysis.local_env import CovalentBondNN
-from .utils import read_table_pattern, read_pattern, lower_and_check_unique
+from .utils import read_table_pattern, read_pattern, lower_and_check_unique, map_atoms_reaction
 
 # Classes for reading/manipulating/writing QChem ouput files.
-
 
 __author__ = "Brandon Wood, Samuel Blau, Shyam Dwaraknath, Julian Self, " \
              "Evan Spotte-Smith"

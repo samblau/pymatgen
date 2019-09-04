@@ -1,6 +1,13 @@
 import re
 import numpy as np
 from collections import defaultdict
+import itertools
+from difflib import SequenceMatcher
+from statistics import mean
+
+from pymatgen.analysis.graphs import MoleculeGraph
+from pymatgen.analysis.local_env import CovalentBondNN
+import networkx.algorithms.isomorphism as iso
 
 
 def read_pattern(text_str, patterns, terminate_on_match=False,
@@ -264,3 +271,105 @@ def process_parsed_coords(coords):
         for jj in range(3):
             geometry[ii, jj] = float(entry[jj])
     return geometry
+
+
+def map_atoms_reaction(reactants, product):
+    """
+    Create a mapping of atoms between a set of reactant Molecules and a product
+    Molecule.
+
+    :param reactants: list of Molecule objects representing the reaction
+        reactants
+    :param product: Molecule object representing the reaction product
+
+    NOTE: This currently only works with one product
+
+    :return: dict with 'reactants' and 'product' keys
+    """
+
+    def get_ranked_atom_dists(mol):
+        dist_matrix = mol.distance_matrix
+
+        result = dict()
+        for num, row in enumerate(dist_matrix):
+            ranking = np.argsort(row)
+            # The first member will always be the atom itself, which should be excluded
+            result[num] = ranking[1:]
+        return result
+
+    rct_mgs = list()
+    for reactant in reactants:
+        rct_mgs.append(MoleculeGraph.with_local_env_strategy(reactant, CovalentBondNN(), reorder=False,
+                                                             extend_structure=False))
+    pro_mg = MoleculeGraph.with_local_env_strategy(product, CovalentBondNN(), reorder=False,
+                                                   extend_structure=False)
+
+    # Next, try to construct isomorphisms between reactant and product
+    nm = iso.categorical_node_match("specie", "ERROR")
+    # Prefer undirected graphs
+    rct_graphs = [rct_mg.graph.to_undirected() for rct_mg in rct_mgs]
+    pro_graph = pro_mg.graph.to_undirected()
+
+    pro_dists = get_ranked_atom_dists(pro_mg.molecule)
+    ranking_by_reactant = list()
+    for e, rct_graph in enumerate(rct_graphs):
+
+        meta_iso = {e: set() for e in range(len(pro_mg.molecule))}
+        matcher = iso.GraphMatcher(pro_graph, rct_graph, node_match=nm)
+
+        # Compile all isomorphisms
+        isomorphisms = [i for i in matcher.subgraph_isomorphisms_iter()]
+        for isomorphism in isomorphisms:
+            for pro_node, rct_node in isomorphism.items():
+                meta_iso[pro_node].add(rct_node)
+
+        meta_iso = {k: v for (k, v) in meta_iso.items() if v != set()}
+
+        # Determine which nodes need to be checked
+        disputed_nodes = set()
+        for pro_node, rct_nodes in meta_iso.items():
+            if len(rct_nodes) > 1:
+                disputed_nodes.add(pro_node)
+
+        average_ratios = list()
+        rct_dists = get_ranked_atom_dists(reactants[e])
+        for isomorphism in isomorphisms:
+            ratios = list()
+
+            for node in disputed_nodes:
+                if node in isomorphism:
+                    rct_dist = rct_dists[isomorphism[node]]
+                    pro_dist_old = pro_dists[node]
+
+                    pro_dist = list()
+                    for n in pro_dist_old:
+                        if n in isomorphism:
+                            pro_dist.append(isomorphism[n])
+
+                    matcher = SequenceMatcher(None, rct_dist, pro_dist)
+                    ratios.append(matcher.ratio())
+
+            average_ratios.append(mean(ratios))
+
+        # Rank isomorphisms by the average SequenceMatch ratio
+        ranking_by_reactant.append([isom for _, isom in sorted(zip(average_ratios, isomorphisms),
+                                                         key=lambda pair: pair[0])])
+
+    combinations = list(itertools.product(*ranking_by_reactant))
+
+    mapping = None
+    for combination in combinations:
+        index_total = 0
+        this_mapping = dict()
+
+        for part in combination:
+            for key, value in part.items():
+                this_mapping[key] = value + index_total
+            index_total += len(part.keys())
+
+        # If this is a valid mapping - all atoms accounted for
+        if len(this_mapping) == len(product):
+            mapping = this_mapping
+            break
+
+    return mapping
