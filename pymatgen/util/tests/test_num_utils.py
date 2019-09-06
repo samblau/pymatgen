@@ -53,6 +53,9 @@ class FuncTestCase(unittest.TestCase):
         with self.assertRaises(TypeError):
             round_to_sigfigs(3.5, 3.5)
 
+    def test_product(self):
+        pass
+
 
 if __name__ == '__main__':
     unittest.main()
