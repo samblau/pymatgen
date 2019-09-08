@@ -8,7 +8,6 @@ import os
 import numpy as np
 from scipy.constants import h, k, R, N_A, pi
 
-from pymatgen.core.structure import Molecule
 from pymatgen.entries.mol_entry import MoleculeEntry
 from pymatgen.io.qchem.inputs import QCInput
 from pymatgen.io.qchem.outputs import QCOutput
@@ -133,8 +132,6 @@ class ReactionRateCalculatorTest(unittest.TestCase):
         gibbs_300_rev = self.calc.calculate_act_gibbs(300, reverse=True)
         gibbs_600 = self.calc.calculate_act_gibbs(600)
 
-        k * 300 / h * np.exp(-gibbs_300 * 4184 / (R * 300))
-
         # Test normal forwards and reverse behavior
         self.assertEqual(self.calc.calculate_rate_constant(),
                          k * 300 / h * np.exp(-gibbs_300 * 4184 / (R * 300)))
@@ -147,17 +144,140 @@ class ReactionRateCalculatorTest(unittest.TestCase):
         self.assertEqual(self.calc.calculate_rate_constant(),
                          self.calc.calculate_rate_constant(kappa=0.5) * 2)
 
-
     def test_rates(self):
-        pass
+
+        rate_constant = self.calc.calculate_rate_constant()
+        rate_constant_600 = self.calc.calculate_rate_constant(temperature=600)
+        rate_constant_rev = self.calc.calculate_rate_constant(reverse=True)
+        base_rate = rate_constant
+
+        self.assertAlmostEqual(self.calc.calculate_rate([1,1]), base_rate)
+        self.assertAlmostEqual(self.calc.calculate_rate([1, 0.5]), base_rate / 2, 8)
+        self.assertAlmostEqual(self.calc.calculate_rate([0.5, 1]), base_rate / 2, 8)
+        self.assertAlmostEqual(self.calc.calculate_rate([0.5, 0.5]), base_rate / 4, 8)
+        self.assertAlmostEqual(self.calc.calculate_rate([1], reverse=True), rate_constant_rev, 8)
+        self.assertAlmostEqual(self.calc.calculate_rate([1, 1], temperature=600), rate_constant_600, 8)
 
 
 class BEPReactionRateCalculatorTest(unittest.TestCase):
-    pass
+    def setUp(self) -> None:
+        infile = QCInput.from_file(fsm_infile)
+
+        self.energies = [-497.161913928997, -533.045879937285, -1030.25766660132]
+        self.enthalpies = [96.692, 79.821, 178.579]
+        self.entropies = [89.627, 107.726, 140.857]
+
+        self.rct_1 = MoleculeEntry(infile.molecule["reactants"][0], self.energies[0],
+                                   enthalpy=self.enthalpies[0], entropy=self.entropies[0])
+        self.rct_2 = MoleculeEntry(infile.molecule["reactants"][1], self.energies[1],
+                                   enthalpy=self.enthalpies[1],
+                                   entropy=self.entropies[1])
+        self.pro = MoleculeEntry(infile.molecule["products"][0], self.energies[2],
+                                 enthalpy=self.enthalpies[2],
+                                 entropy=self.entropies[2])
+
+        self.calc = BEPRateCalculator([self.rct_1, self.rct_2], [self.pro], 15.0, -15.0)
+
+    def test_act_properties(self):
+        self.assertAlmostEqual(self.calc.calculate_act_energy(),
+                               self.calc.ea_reference + 0.5 * (self.calc.net_enthalpy - self.calc.delta_h_reference),
+                               6)
+        self.assertAlmostEqual(self.calc.calculate_act_energy(reverse=True),
+                               self.calc.ea_reference + 0.5 * (-1 * self.calc.net_enthalpy - self.calc.delta_h_reference),
+                               6)
+
+        with self.assertRaises(NotImplementedError):
+            self.calc.calculate_act_enthalpy()
+        with self.assertRaises(NotImplementedError):
+            self.calc.calculate_act_entropy()
+        with self.assertRaises(NotImplementedError):
+            self.calc.calculate_act_gibbs(300)
+        with self.assertRaises(NotImplementedError):
+            self.calc.calculate_act_thermo(temperature=300.00)
+
+    def test_rate_constant(self):
+        #TODO: Test reverse? But that's already covered by test_act_properties
+        rate_constant = np.exp(-self.calc.calculate_act_energy() * 4184 / (R * 300))
+        rate_constant_600 = np.exp(-self.calc.calculate_act_energy() * 4184 / (R * 600))
+
+        self.assertEqual(self.calc.calculate_rate_constant(temperature=300), rate_constant)
+        self.assertEqual(self.calc.calculate_rate_constant(temperature=600), rate_constant_600)
+
+    def test_rates(self):
+        base_rate = 3.7116436665957286e+40
+        rate_600 = 1.9579501057245393e+49
+
+        self.assertAlmostEqual(self.calc.calculate_rate([1, 1]) / base_rate,
+                               1, 8)
+        self.assertAlmostEqual(self.calc.calculate_rate([1, 0.5]) / (base_rate / 2),
+                               1, 8)
+        self.assertAlmostEqual(self.calc.calculate_rate([0.5, 1]) / (base_rate / 2),
+                               1, 8)
+        self.assertAlmostEqual(self.calc.calculate_rate([0.5, 0.5]) / (base_rate / 4),
+                               1, 8)
+        self.assertAlmostEqual(self.calc.calculate_rate([1, 1], kappa=0.5) / (base_rate / 2),
+                               1, 8)
+
+        self.assertAlmostEqual(self.calc.calculate_rate([1, 1], temperature=600) / rate_600, 1, 8)
 
 
 class ExpandedBEPReactionRateCalculatorTest(unittest.TestCase):
-    pass
+    def setUp(self) -> None:
+        infile = QCInput.from_file(fsm_infile)
+
+        self.energies = [-497.161913928997, -533.045879937285, -1030.25766660132]
+        self.enthalpies = [96.692, 79.821, 178.579]
+        self.entropies = [89.627, 107.726, 140.857]
+
+        self.rct_1 = MoleculeEntry(infile.molecule["reactants"][0], self.energies[0],
+                                   enthalpy=self.enthalpies[0], entropy=self.entropies[0])
+        self.rct_2 = MoleculeEntry(infile.molecule["reactants"][1], self.energies[1],
+                                   enthalpy=self.enthalpies[1],
+                                   entropy=self.entropies[1])
+        self.pro = MoleculeEntry(infile.molecule["products"][0], self.energies[2],
+                                 enthalpy=self.enthalpies[2],
+                                 entropy=self.entropies[2])
+
+        self.calc = ExpandedBEPRateCalculator([self.rct_1, self.rct_2], [self.pro],
+                                              15.0, -15.0, -48.0)
+
+    def test_act_properties(self):
+
+        delta_g_ref = self.calc.delta_h_reference - 300 * self.calc.delta_s_reference / 1000
+        delta_g = self.calc.net_enthalpy - 300 * self.calc.net_entropy / 1000
+        delta_g_rev = -self.calc.net_enthalpy + 300 * self.calc.net_entropy / 1000
+
+        delta_g_ref_600 = self.calc.delta_h_reference - 600 * self.calc.delta_s_reference / 1000
+        delta_g_600 = self.calc.net_enthalpy - 600 * self.calc.net_entropy / 1000
+
+        self.assertAlmostEqual(self.calc.calculate_act_gibbs(300),
+                               self.calc.delta_ga_reference + self.calc.alpha * (delta_g - delta_g_ref))
+        self.assertAlmostEqual(self.calc.calculate_act_gibbs(300, reverse=True),
+                               self.calc.delta_ga_reference + self.calc.alpha * (delta_g_rev - delta_g_ref))
+        self.assertAlmostEqual(self.calc.calculate_act_gibbs(600),
+                               self.calc.delta_ga_reference + self.calc.alpha * (delta_g_600 - delta_g_ref_600))
+
+        with self.assertRaises(NotImplementedError):
+            self.calc.calculate_act_energy()
+        with self.assertRaises(NotImplementedError):
+            self.calc.calculate_act_enthalpy()
+        with self.assertRaises(NotImplementedError):
+            self.calc.calculate_act_entropy()
+        with self.assertRaises(NotImplementedError):
+            self.calc.calculate_act_thermo(temperature=300.00)
+
+    def test_rate_constant(self):
+        gibbs_300 = self.calc.calculate_act_gibbs(300)
+        gibbs_600 = self.calc.calculate_act_gibbs(600)
+
+        self.assertEqual(self.calc.calculate_rate_constant(),
+                         k * 300 / h * np.exp(-gibbs_300 * 4184 / (R * 300)))
+        self.assertEqual(self.calc.calculate_rate_constant(temperature=600),
+                         k * 600 / h * np.exp(-gibbs_600 * 4184 / (R * 600)))
+
+        # Test effect of kappa
+        self.assertEqual(self.calc.calculate_rate_constant(),
+                         self.calc.calculate_rate_constant(kappa=0.5) * 2)
 
 
 if __name__ == "__main__":

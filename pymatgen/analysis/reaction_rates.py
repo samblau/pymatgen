@@ -277,8 +277,8 @@ class ReactionRateCalculator:
         NOTE: Here, we assume that the reaction is an elementary step.
 
         Args:
-            concentrations (list): concentrations of reactant molecules. Order of the reactants
-                DOES matter.
+            concentrations (list): concentrations of reactant molecules (product molecules, if
+                reverse=True). Order of the reactants/products DOES matter.
             temperature (float): absolute temperature in Kelvin
             reverse (bool): if True (default False), consider the reverse reaction; otherwise,
                 consider the forwards reaction
@@ -297,8 +297,8 @@ class ReactionRateCalculator:
         else:
             comps = [r.mol_graph.molecule.composition for r in self.reactants]
 
-        exponents = np.array([self.reaction.get_coeff(comp) for comp in comps])
-        rate = rate_constant * np.array(concentrations) ** exponents
+        exponents = np.abs(np.array([self.reaction.get_coeff(comp) for comp in comps]))
+        rate = rate_constant * product(np.array(concentrations) ** exponents)
 
         return rate
 
@@ -378,7 +378,6 @@ class BEPRateCalculator(ReactionRateCalculator):
         raise NotImplementedError("Method calculate_act_gibbs is not valid for "
                                   "BellEvansPolanyiRateCalculator,")
 
-
     def calculate_activation_thermo(self, temperature=300.0, reverse=False):
         raise NotImplementedError("Method calculate_activation_thermo is not valid for "
                                   "BellEvansPolanyiRateCalculator,")
@@ -391,7 +390,7 @@ class BEPRateCalculator(ReactionRateCalculator):
             temperature (float): absolute temperature in Kelvin
             reverse (bool): if True (default False), consider the reverse reaction; otherwise,
                 consider the forwards reaction
-            kappa (None): not used for BellEvansPolanyiRateCalculator
+            kappa (None): not used for BEPRateCalculator
 
         Returns:
             k_rate (float): temperature-dependent rate constant
@@ -428,13 +427,13 @@ class BEPRateCalculator(ReactionRateCalculator):
             mols = [r.mol_graph.molecule for r in self.reactants]
 
         masses = [m.composition.weight for m in mols]
-        exponents = np.array([self.reaction.get_coeff(mol.composition) for mol in mols])
+        exponents = np.abs(np.array([self.reaction.get_coeff(mol.composition) for mol in mols]))
 
-        radius_factor = pi * sum([(max(mol.distance_matrix) / 2) ** 2 for mol in mols])
+        radius_factor = pi * sum([(np.max(mol.distance_matrix) / 2) ** 2 for mol in mols])
 
         total_exponent = sum(exponents)
         number_prefactor = (1000 * N_A) ** total_exponent
-        concentration_factor = np.array(concentrations) ** exponents
+        concentration_factor = product(np.array(concentrations) ** exponents)
         mass_factor = product(masses)/sum(masses) * amu_to_kg
         root_factor = np.sqrt(8 * k * temperature / (pi * mass_factor))
 
