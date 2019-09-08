@@ -85,13 +85,21 @@ property_list = {"errors",
                  "using_dft_d3",
                  "single_point_job",
                  "force_job",
+                 "freezing_string_job",
                  "pcm_gradients",
                  "CDS_gradients",
                  "RESP",
                  "trans_dip",
-                 "num_images",
-                 "string_images",
-                 "max_energy_string"}
+                 "string_num_images",
+                 "string_energies",
+                 "string_relative_energies",
+                 "string_geometries",
+                 "string_molecules",
+                 "string_absolute_distances",
+                 "string_proportional_distances",
+                 "string_gradient_magnitudes",
+                 "string_max_energy",
+                 "string_ts_guess"}
 
 if have_babel:
     property_list.add("structure_change")
@@ -148,7 +156,8 @@ single_job_out_names = {"unable_to_determine_lambda_in_geom_opt.qcout",
                         "new_qchem_files/1746.qout",
                         "new_qchem_files/1570.qout",
                         "new_qchem_files/1570_2.qout",
-                        "new_qchem_files/single_point.qout"}
+                        "new_qchem_files/single_point.qout",
+                        "new_qchem_files/fsm.qout"}
 
 multi_job_out_names = {"not_enough_total_memory.qcout",
                        "new_qchem_files/VC_solv_eps10.qcout",
@@ -169,7 +178,7 @@ class TestQCOutput(PymatgenTest):
         """
         Used to generate test dictionary for single jobs.
         """
-        single_job_dict = {}
+        single_job_dict = dict()
         for file in single_job_out_names:
             single_job_dict[file] = QCOutput(os.path.join(test_dir, file)).data
         dumpfn(single_job_dict, "single_job.json")
@@ -179,7 +188,7 @@ class TestQCOutput(PymatgenTest):
         """
         Used to generate test dictionary for multiple jobs.
         """
-        multi_job_dict = {}
+        multi_job_dict = dict()
         for file in multi_job_out_names:
             outputs = QCOutput.multiple_outputs_from_file(
                 QCOutput, os.path.join(test_dir, file), keep_sub_files=False)

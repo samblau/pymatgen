@@ -1972,36 +1972,13 @@ class MoleculeGraph(MSONable):
         MoleculeGraph. It creates a copy, modifies that, and
         returns two or more new MoleculeGraph objects.
 
-        :param bonds: list of tuples (from_index, to_index)
-            representing bonds to be broken to split the MoleculeGraph.
-        :param alterations: a dict {(from_index, to_index): alt},
-            where alt is a dictionary including weight and/or edge
-            properties to be changed following the split.
-        :param allow_reverse: If allow_reverse is True, then break_edge will
-            attempt to break both (from_index, to_index) and, failing that,
-            will attempt to break (to_index, from_index).
         :return: list of MoleculeGraphs
         """
 
         if nx.is_weakly_connected(self.graph):
             return [copy.deepcopy(self)]
         else:
-
-            # alter any bonds before partition, to avoid remapping
-            if alterations is not None:
-                for (u, v) in alterations.keys():
-                    if "weight" in alterations[(u, v)]:
-                        weight = alterations[(u, v)]["weight"]
-                        del alterations[(u, v)]["weight"]
-                        edge_properties = alterations[(u, v)] \
-                            if len(alterations[(u, v)]) != 0 else None
-                        original.alter_edge(u, v, new_weight=weight,
-                                            new_edge_properties=edge_properties)
-                    else:
-                        original.alter_edge(u, v,
-                                            new_edge_properties=alterations[(u, v)])
-
-            sub_mols = []
+            sub_mols = list()
 
             components = nx.weakly_connected_components(self.graph)
             subgraphs = [self.graph.subgraph(c) for c in components]

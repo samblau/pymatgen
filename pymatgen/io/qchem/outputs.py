@@ -392,6 +392,7 @@ class QCOutput(MSONable):
                 self.data["multiplicity"] = int(
                     float(temp_multiplicity[0][0])) + 1
 
+    #TODO: Fix this for FSM multiple-molecule option
     def _read_species_and_inital_geometry(self):
         """
         Parses species and initial geometry.
@@ -529,8 +530,7 @@ class QCOutput(MSONable):
                     Total_energy[ii] = float(val[0])
                 self.data["Total_energy_in_the_final_basis_set"] = Total_energy
 
-
-    def _read_mulliken(self):
+    def _read_charges(self):
         """
         Parses Mulliken/ESP/RESP charges. Also parses spins given an unrestricted SCF.
         """
@@ -825,6 +825,41 @@ class QCOutput(MSONable):
         else:
             self.data["CDS_gradients"] = None
 
+    def _read_optimization_data(self):
+        temp_energy_trajectory = read_pattern(
+            self.text, {
+                "key": r"\sEnergy\sis\s+([\d\-\.]+)"
+            }).get('key')
+        if temp_energy_trajectory is None:
+            self.data["energy_trajectory"] = []
+        else:
+            real_energy_trajectory = np.zeros(len(temp_energy_trajectory))
+            for ii, entry in enumerate(temp_energy_trajectory):
+                real_energy_trajectory[ii] = float(entry[0])
+            self.data["energy_trajectory"] = real_energy_trajectory
+            self._read_geometries()
+            if have_babel:
+                self.data["structure_change"] = check_for_structure_changes(
+                    self.data["initial_molecule"],
+                    self.data["molecule_from_last_geometry"])
+            self._read_gradients()
+            # Then, if no optimized geometry or z-matrix is found, and no errors have been previously
+            # idenfied, check to see if the optimization failed to converge or if Lambda wasn't able
+            # to be determined.
+            if len(self.data.get("errors")) == 0 and self.data.get('optimized_geometry') is None \
+                    and len(self.data.get('optimized_zmat')) == 0:
+                if read_pattern(
+                        self.text, {
+                            "key": r"MAXIMUM OPTIMIZATION CYCLES REACHED"
+                        },
+                        terminate_on_match=True).get('key') == [[]]:
+                    self.data["errors"] += ["out_of_opt_cycles"]
+                elif read_pattern(
+                        self.text, {
+                            "key": r"UNABLE TO DETERMINE Lamda IN FormD"
+                        },
+                        terminate_on_match=True).get('key') == [[]]:
+                    self.data["errors"] += ["unable_to_determine_lamda"]
 
     def _read_frequency_data(self):
         """
@@ -980,6 +1015,37 @@ class QCOutput(MSONable):
             # -1 in case of pcm
             # Two lines will match the above; we want final calculation
             self.data['final_energy'] = float(temp_dict.get('final_energy')[-1][0])
+
+    #TODO: Fix this for FSM multiple-molecule option
+    def _read_freezing_string_data(self):
+        """
+        Parses information from freezing string method (FSM) calculation to predict the transition
+        state of the reaction.
+        """
+
+        dirname = os.path.dirname(self.filename)
+
+        vfile_parser = QCVFileParser(filename=os.path.join(dirname, "Vfile.txt"))
+        stringfile_parser = QCStringfileParser(filename=os.path.join(dirname, "stringfile.txt"))
+        perpgradfile_parser = QCPerpGradFileParser(filename=os.path.join(dirname,
+                                                                         "perp_grad_file.txt"))
+
+        self.data["string_num_images"] = vfile_parser.data["num_images"]
+        self.data["string_energies"] = vfile_parser.data["image_energies"]
+        self.data["string_relative_energies"] = vfile_parser.data["relative_energies"]
+
+        self.data["string_geometries"] = stringfile_parser.data["geometries"]
+        self.data["string_molecules"] = stringfile_parser.data["molecules"]
+
+        self.data["string_absolute_distances"] = perpgradfile_parser.data["absolute_distances"]
+        self.data["string_proportional_distances"] = perpgradfile_parser.data["proportional_distances"]
+        self.data["string_gradient_magnitudes"] = perpgradfile_parser.data["gradient_magnitudes"]
+
+        string_max_energy = max(vfile_parser.data["image_energies"])
+        max_index = vfile_parser.data["image_energies"].index(string_max_energy)
+        molecule_max_energy = stringfile_parser.data["molecules"][max_index]
+        self.data["string_max_energy"] = string_max_energy
+        self.data["string_ts_guess"] = molecule_max_energy
 
     def _read_pcm_information(self):
         """

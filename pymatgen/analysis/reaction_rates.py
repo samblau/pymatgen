@@ -12,7 +12,10 @@ from pymatgen.analysis.reaction_calculator import Reaction, ReactionError
 
 __author__ = "Evan Spotte-Smith"
 __version__ = "0.1"
+__maintainer__ = "Evan Spotte-Smith"
 __email__ = "espottesmith@gmail.com"
+__status__ = "Alpha"
+__date__ = "September 2019"
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +54,7 @@ class ReactionRateCalculator:
 
         if reaction is None:
             rct_mols = [r.mol_graph.molecule for r in self.reactants]
-            pro_mols = [p.mol_graph.molecule for p in self.reactions]
+            pro_mols = [p.mol_graph.molecule for p in self.products]
             try:
                 self.reaction = self.generate_reaction(rct_mols, pro_mols)
             except ReactionError:
@@ -59,71 +62,6 @@ class ReactionRateCalculator:
                 self.reaction = None
         else:
             self.reaction = reaction
-
-    @classmethod
-    def from_atomate_tasks(cls, reactants, products, transition_state):
-        """
-        Constructor using task documents (MSON-dicts) from atomate workflows.
-
-        Note: This constructor is NOT FLEXIBLE, and requires that task docs at least have access to
-        an "output" field (as well as subfields "optimized_geometry", "final_energy", "enthalpy",
-        and "entropy").
-
-        Args:
-            reactants (list): list of dicts representing task docs for reactant molecules
-            products (list): list of dicts representing task docs for product molecules
-            transition_state (dict): dict representing task doc for transition state molecule
-
-        Returns:
-            ReactionRateCalculator
-        """
-
-        rcts = list()
-        pros = list()
-
-        # Construct main dicts with molecular properties
-        for rct_doc in reactants:
-            try:
-                rcts.append(MoleculeEntry(Molecule.from_dict(rct_doc["output"]["optimized_molecule"]),
-                                          rct_doc["output"]["final_energy"],
-                                          enthalpy=rct_doc["output"]["enthalpy"],
-                                          entropy=rct_doc["output"]["entropy"],
-                                          entry_id=rct_doc["task_id"]))
-            except KeyError:
-                raise ValueError("Reactant task doc does not follow schema! Docs must contain"
-                                 " an output field with subfields optimized_geometry, final_energy,"
-                                 " enthalpy, and entropy.")
-
-        for pro_doc in products:
-            try:
-                pros.append(MoleculeEntry(Molecule.from_dict(pro_doc["output"]["optimized_molecule"]),
-                                          pro_doc["output"]["final_energy"],
-                                          enthalpy=pro_doc["output"]["enthalpy"],
-                                          entropy=pro_doc["output"]["entropy"],
-                                          entry_id=pro_doc["task_id"]))
-
-            except KeyError:
-                raise ValueError("Product task doc does not follow schema! Docs must contain"
-                                 " an output field with subfields optimized_geometry, final_energy,"
-                                 " enthalpy, and entropy.")
-
-        try:
-            transition = MoleculeEntry(Molecule.from_dict(transition_state["output"]["optimized_molecule"]),
-                                       transition_state["output"]["final_energy"],
-                                       enthalpy=transition_state["output"]["enthalpy"],
-                                       entropy=transition_state["output"]["entropy"],
-                                       entry_id=transition_state["task_id"])
-        except KeyError:
-            raise ValueError("Transition state task doc does not follow schema! Docs must contain"
-                             " an output field with subfields optimized_geometry, final_energy,"
-                             " enthalpy, and entropy.")
-
-        # Calculate stoichiometry
-        rct_mols = [r.mol_graph.molecule for r in rcts]
-        pro_mols = [p.mol_graph.molecule for p in pros]
-        reaction = cls.generate_reaction(rct_mols, pro_mols)
-
-        return cls(rcts, pros, transition, reaction=reaction)
 
     @classmethod
     def generate_reaction(cls, rct_mols, pro_mols):
@@ -292,7 +230,7 @@ class ReactionRateCalculator:
 
         return self.calculate_act_enthalpy(reverse=reverse) - temperature * self.calculate_act_entropy(reverse=reverse) / 1000
 
-    def calculate_activation_thermo(self, temperature=300.0, reverse=False):
+    def calculate_act_thermo(self, temperature=300.0, reverse=False):
         """
         Calculate thermodynamics of activation for the reaction.
 
