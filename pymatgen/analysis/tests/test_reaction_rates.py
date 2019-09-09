@@ -204,8 +204,8 @@ class BEPReactionRateCalculatorTest(unittest.TestCase):
         self.assertEqual(self.calc.calculate_rate_constant(temperature=600), rate_constant_600)
 
     def test_rates(self):
-        base_rate = 3.7116436665957286e+40
-        rate_600 = 1.9579501057245393e+49
+        base_rate = 7.419655465973114e+20
+        rate_600 = 3.9139843446679724e+29
 
         self.assertAlmostEqual(self.calc.calculate_rate([1, 1]) / base_rate,
                                1, 8)

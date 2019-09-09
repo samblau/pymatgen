@@ -3,7 +3,6 @@ import logging
 import numpy as np
 from scipy.constants import h, k, R, N_A, pi
 
-from pymatgen.core.structure import Molecule
 from pymatgen.core.units import amu_to_kg
 from pymatgen.util.num import product
 from pymatgen.entries.mol_entry import MoleculeEntry
@@ -429,7 +428,8 @@ class BEPRateCalculator(ReactionRateCalculator):
         masses = [m.composition.weight for m in mols]
         exponents = np.abs(np.array([self.reaction.get_coeff(mol.composition) for mol in mols]))
 
-        radius_factor = pi * sum([(np.max(mol.distance_matrix) / 2) ** 2 for mol in mols])
+        # Have to convert to m from Angstrom
+        radius_factor = pi * sum([(np.max(mol.distance_matrix) * (10 ** -10) / 2) for mol in mols]) ** 2
 
         total_exponent = sum(exponents)
         number_prefactor = (1000 * N_A) ** total_exponent
