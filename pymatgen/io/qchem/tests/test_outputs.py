@@ -99,7 +99,11 @@ property_list = {"errors",
                  "string_proportional_distances",
                  "string_gradient_magnitudes",
                  "string_max_energy",
-                 "string_ts_guess"}
+                 "string_ts_guess",
+                 "string_initial_reactant_molecules",
+                 "string_initial_product_molecules",
+                 "string_initial_reactant_geometry",
+                 "string_initial_product_geometry"}
 
 if have_babel:
     property_list.add("structure_change")

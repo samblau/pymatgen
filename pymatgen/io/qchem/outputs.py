@@ -15,7 +15,7 @@ from monty.json import MSONable
 from pymatgen.core import Molecule
 
 from pymatgen.analysis.graphs import MoleculeGraph
-from pymatgen.analysis.local_env import OpenBabelNN
+from pymatgen.analysis.local_env import OpenBabelNN, CovalentBondNN
 import networkx as nx
 
 try:
@@ -309,8 +309,8 @@ class QCOutput(MSONable):
             },
             terminate_on_match=True).get("key")
         if self.data.get("freezing_string_job", []):
+            self._read_string_geometries()
             self._read_freezing_string_data()
-            self._read_geometries()
 
         self.data["force_job"] = read_pattern(
             self.text, {
@@ -392,7 +392,6 @@ class QCOutput(MSONable):
                 self.data["multiplicity"] = int(
                     float(temp_multiplicity[0][0])) + 1
 
-    #TODO: Fix this for FSM multiple-molecule option
     def _read_species_and_inital_geometry(self):
         """
         Parses species and initial geometry.
@@ -684,12 +683,11 @@ class QCOutput(MSONable):
                 terminate_on_match=True).get('key') == [[]]:
             self.data["warnings"]["diagonalizing_BBt"] = True
 
-
     def _read_geometries(self):
         """
         Parses all geometries from an optimization trajectory.
         """
-        geoms = []
+        geoms = list()
         header_pattern = r"\s+Optimization\sCycle:\s+\d+\s+Coordinates \(Angstroms\)\s+ATOM\s+X\s+Y\s+Z"
         table_pattern = r"\s+\d+\s+\w+\s+([\d\-\.]+)\s+([\d\-\.]+)\s+([\d\-\.]+)"
         footer_pattern = r"\s+Point Group\:\s+[\d\w\*]+\s+Number of degrees of freedom\:\s+\d+"
@@ -1016,7 +1014,57 @@ class QCOutput(MSONable):
             # Two lines will match the above; we want final calculation
             self.data['final_energy'] = float(temp_dict.get('final_energy')[-1][0])
 
-    #TODO: Fix this for FSM multiple-molecule option
+    def _read_string_geometries(self):
+        """
+        Parses geometries for FSM calculations (which are formatted differently than for
+        optimization calculations)
+        """
+        geoms = list()
+        header_pattern = r"Standard Nuclear Orientation \(Angstroms\)\s+I\s+Atom\s+X\s+Y\s+Z\s+-+"
+        table_pattern = r"\s*\d+\s+([a-zA-Z]+)\s*([\d\-\.]+)\s*([\d\-\.]+)\s*([\d\-\.]+)\s*"
+        footer_pattern = r"\s*-+"
+
+        parsed_geometries = read_table_pattern(
+            self.text, header_pattern, table_pattern, footer_pattern)
+        for parsed_geometry in parsed_geometries:
+            if parsed_geometry == list() or None:
+                geoms.append(None)
+            else:
+                coords = [e[1:] for e in parsed_geometry]
+                geoms.append(process_parsed_coords(coords))
+
+        self.data["geometries"] = geoms
+        self.data["last_geometry"] = geoms[-1]
+
+        if self.data.get('charge') is not None:
+            self.data["molecule_from_last_geometry"] = Molecule(
+                species=self.data.get('species'),
+                coords=self.data.get('last_geometry'),
+                charge=self.data.get('charge'),
+                spin_multiplicity=self.data.get('multiplicity'))
+
+        self.data["string_initial_reactant_geometry"] = self.data["geometries"][0]
+        # Two reactant geometries should initially be present, so third is product
+        self.data["string_initial_product_geometry"] = self.data["geometries"][2]
+
+        reactant_mol = Molecule(
+            species=self.data.get("species"),
+            coords=self.data.get("geometries")[0],
+            charge=self.data.get("charge"),
+            spin_multiplicity=self.data.get("multiplicity"))
+        reactant_mg = MoleculeGraph.with_local_env_strategy(reactant_mol, OpenBabelNN(),
+                                                            extend_structure=False, reorder=False)
+        self.data["string_initial_reactant_molecules"] = [f.molecule for f in reactant_mg.get_disconnected_fragments()]
+
+        product_mol = Molecule(
+            species=self.data.get("species"),
+            coords=self.data.get("geometries")[2],
+            charge=self.data.get("charge"),
+            spin_multiplicity=self.data.get("multiplicity"))
+        product_mg = MoleculeGraph.with_local_env_strategy(product_mol, OpenBabelNN(),
+                                                           extend_structure=False, reorder=False)
+        self.data["string_initial_product_molecules"] = [f.molecule for f in product_mg.get_disconnected_fragments()]
+
     def _read_freezing_string_data(self):
         """
         Parses information from freezing string method (FSM) calculation to predict the transition

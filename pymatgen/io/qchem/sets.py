@@ -103,6 +103,12 @@ class QChemDictSet(QCInput):
         if self.job_type.lower() in ["opt", "ts"]:
             myrem["geom_opt_max_cycles"] = self.geom_opt_max_cycles
 
+        if self.job_type.lower() == "fsm":
+            myrem["fsm_mode"] = 2
+            myrem["fsm_nnode"] = 15
+            myrem["fsm_ngrad"] = 4
+            myrem["fsm_opt_mode"] = 2
+
         if self.pcm_dielectric is not None and self.smd_solvent is not None:
             raise ValueError("Only one of pcm or smd may be used for solvation.")
 
@@ -196,8 +202,8 @@ class TransitionStateSet(QChemDictSet):
 
     def __init__(self,
                  molecule,
-                 dft_rung=4,
-                 basis_set="6-311++G*",
+                 dft_rung=3,
+                 basis_set="def2-tzvppd",
                  pcm_dielectric=None,
                  smd_solvent=None,
                  custom_smd=None,
@@ -292,8 +298,8 @@ class FreezingStringSet(QChemDictSet):
 
     def __init__(self,
                  molecule,
-                 dft_rung=4,
-                 basis_set="6-311++G*",
+                 dft_rung=3,
+                 basis_set="def2-tzvppd",
                  pcm_dielectric=None,
                  smd_solvent=None,
                  custom_smd=None,

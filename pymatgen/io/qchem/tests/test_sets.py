@@ -23,6 +23,7 @@ qchem_dir = os.path.join(
     os.path.dirname(__file__), "..", "..", "..", "..", "test_files",
     "qchem")
 
+
 class QChemDictSetTest(PymatgenTest):
     def test_init(self):
         test_molecule = QCInput.from_file(
@@ -272,6 +273,7 @@ class QChemDictSetTest(PymatgenTest):
             self.assertEqual(lines[0],"90.00,1.415,0.00,0.735,20.2,0.00,0.00")
         os.remove("solvent_data")
 
+
 class OptSetTest(PymatgenTest):
     def test_init(self):
         test_molecule = QCInput.from_file(
@@ -359,12 +361,15 @@ class TransitionStateSetTest(PymatgenTest):
             test_TSSet.rem, {
                 'job_type': 'ts',
                 'gen_scfman': 'true',
-                'basis': '6-311++g*',
+                'basis': 'def2-tzvppd',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
                 'scf_algorithm': 'diis_gdm',
                 'xc_grid': '3',
-                'geom_opt_max_cycles': 200
+                'geom_opt_max_cycles': 200,
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
             })
         self.assertEqual(test_TSSet.pcm, {})
         self.assertEqual(test_TSSet.solvent, {})
@@ -380,13 +385,16 @@ class TransitionStateSetTest(PymatgenTest):
             test_TSSet.rem, {
                 'job_type': 'ts',
                 'gen_scfman': 'true',
-                'basis': '6-311++g*',
+                'basis': 'def2-tzvppd',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
                 'geom_opt_max_cycles': 200,
                 'scf_algorithm': 'diis_gdm',
                 'xc_grid': '3',
-                'solvent_method': 'pcm'
+                'solvent_method': 'pcm',
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
             })
         self.assertEqual(
             test_TSSet.pcm, {
@@ -408,14 +416,17 @@ class TransitionStateSetTest(PymatgenTest):
             test_TSSet.rem, {
                 'job_type': 'ts',
                 'gen_scfman': 'true',
-                'basis': '6-311++g*',
+                'basis': 'def2-tzvppd',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
                 'geom_opt_max_cycles': 200,
                 'scf_algorithm': 'diis_gdm',
                 'xc_grid': '3',
                 'solvent_method': 'smd',
-                'ideriv': '1'
+                'ideriv': '1',
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
             })
         self.assertEqual(test_TSSet.smx, {'solvent': 'water'})
         self.assertEqual(test_TSSet.molecule, test_molecule)
@@ -430,11 +441,18 @@ class FreezingStringSetTest(PymatgenTest):
         self.assertEqual(test_FSMSet.rem, {
                 'job_type': 'fsm',
                 'gen_scfman': 'true',
-                'basis': '6-311++g*',
+                'basis': 'def2-tzvppd',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
                 'scf_algorithm': 'diis_gdm',
-                'xc_grid': '3'
+                'xc_grid': '3',
+                'fsm_mode': 2,
+                'fsm_ngrad': 4,
+                'fsm_nnode': 15,
+                'fsm_opt_mode': 2,
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
             })
         self.assertEqual(test_FSMSet.pcm, {})
         self.assertEqual(test_FSMSet.solvent, {})
@@ -449,12 +467,19 @@ class FreezingStringSetTest(PymatgenTest):
             test_FSMSet.rem, {
                 'job_type': 'fsm',
                 'gen_scfman': 'true',
-                'basis': '6-311++g*',
+                'basis': 'def2-tzvppd',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
                 'scf_algorithm': 'diis_gdm',
                 'xc_grid': '3',
-                'solvent_method': 'pcm'
+                'solvent_method': 'pcm',
+                'fsm_mode': 2,
+                'fsm_ngrad': 4,
+                'fsm_nnode': 15,
+                'fsm_opt_mode': 2,
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
             })
         self.assertEqual(
             test_FSMSet.pcm, {
@@ -476,13 +501,20 @@ class FreezingStringSetTest(PymatgenTest):
             test_FSMSet.rem, {
                 'job_type': 'fsm',
                 'gen_scfman': 'true',
-                'basis': '6-311++g*',
+                'basis': 'def2-tzvppd',
                 'max_scf_cycles': 200,
                 'method': 'wb97xd',
                 'scf_algorithm': 'diis_gdm',
                 'xc_grid': '3',
                 'solvent_method': 'smd',
-                'ideriv': '1'
+                'ideriv': '1',
+                'fsm_mode': 2,
+                'fsm_ngrad': 4,
+                'fsm_nnode': 15,
+                'fsm_opt_mode': 2,
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
             })
         self.assertEqual(test_FSMSet.smx, {'solvent': 'water'})
         self.assertEqual(test_FSMSet.molecule, test_molecule)

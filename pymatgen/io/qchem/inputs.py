@@ -420,8 +420,8 @@ class QCInput(MSONable):
             "charge": r"^\s*\$molecule\n\s*((?:\-)*\d+)\s+\d",
         }
 
-        header_rct = r"^\s*\$molecule\n\s*(?:\-)*\d+\s*\d"
-        header_pro = r"^\s*\$molecule\s*"
+        header_rct = r"^\s*\$molecule\n\s*(?:\-)*\d+\s*\d$"
+        header_pro = r"^\s*\$molecule\s*$"
         row = r"\s*((?i)[a-z]+)\s+([\d\-\.]+)\s+([\d\-\.]+)\s+([\d\-\.]+)"
         footer = r"^\$end\s*"
 
@@ -443,7 +443,7 @@ class QCInput(MSONable):
             footer_pattern=footer)
         species_rct = [val[0] for val in rct_table[0]]
         coords_rct = [[float(val[1]), float(val[2]),
-                   float(val[3])] for val in rct_table[0]]
+                       float(val[3])] for val in rct_table[0]]
 
         rct_mol = Molecule(
             species=species_rct,
