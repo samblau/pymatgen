@@ -282,9 +282,11 @@ def map_atoms_reaction(reactants, product):
         reactants
     :param product: Molecule object representing the reaction product
 
+    The mapping returned is
+
     NOTE: This currently only works with one product
 
-    :return: dict with 'reactants' and 'product' keys
+    :return: dict {product_atom_index: reactant_atom_index}
     """
 
     def get_ranked_atom_dists(mol):

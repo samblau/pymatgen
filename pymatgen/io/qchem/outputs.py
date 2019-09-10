@@ -256,8 +256,16 @@ class QCOutput(MSONable):
             self.text, {
                 "key": r"(?i)\s*job(?:_)*type\s*(?:=)*\s*opt"
             }).get('key')
-        if self.data.get('optimization', []):
+        if self.data.get('optimization', list()):
             self._read_optimization_data()
+
+        # Check if the calculation is a transition state optimization. If so, parse the relevant output
+        self.data["transition_state"] = read_pattern(
+            self.text, {
+                "key": r"(?i)\s*job(?:_)*type\s*(?:=)*\s*ts"
+            }).get('key')
+        if self.data.get('transition_state', list()):
+            self._read_transition_state_data()
 
         # Check if the calculation contains a constraint in an $opt section.
         self.data["opt_constraint"] = read_pattern(self.text, {
@@ -824,6 +832,43 @@ class QCOutput(MSONable):
             self.data["CDS_gradients"] = None
 
     def _read_optimization_data(self):
+        temp_energy_trajectory = read_pattern(
+            self.text, {
+                "key": r"\sEnergy\sis\s+([\d\-\.]+)"
+            }).get('key')
+        if temp_energy_trajectory is None:
+            self.data["energy_trajectory"] = []
+        else:
+            real_energy_trajectory = np.zeros(len(temp_energy_trajectory))
+            for ii, entry in enumerate(temp_energy_trajectory):
+                real_energy_trajectory[ii] = float(entry[0])
+            self.data["energy_trajectory"] = real_energy_trajectory
+            self._read_geometries()
+            if have_babel:
+                self.data["structure_change"] = check_for_structure_changes(
+                    self.data["initial_molecule"],
+                    self.data["molecule_from_last_geometry"])
+            self._read_gradients()
+            # Then, if no optimized geometry or z-matrix is found, and no errors have been previously
+            # idenfied, check to see if the optimization failed to converge or if Lambda wasn't able
+            # to be determined.
+            if len(self.data.get("errors")) == 0 and self.data.get('optimized_geometry') is None \
+                    and len(self.data.get('optimized_zmat')) == 0:
+                if read_pattern(
+                        self.text, {
+                            "key": r"MAXIMUM OPTIMIZATION CYCLES REACHED"
+                        },
+                        terminate_on_match=True).get('key') == [[]]:
+                    self.data["errors"] += ["out_of_opt_cycles"]
+                elif read_pattern(
+                        self.text, {
+                            "key": r"UNABLE TO DETERMINE Lamda IN FormD"
+                        },
+                        terminate_on_match=True).get('key') == [[]]:
+                    self.data["errors"] += ["unable_to_determine_lamda"]
+
+    # Currently, ts is treated identically to opt; once we run more tests, this will need to change
+    def _read_transition_state_data(self):
         temp_energy_trajectory = read_pattern(
             self.text, {
                 "key": r"\sEnergy\sis\s+([\d\-\.]+)"
