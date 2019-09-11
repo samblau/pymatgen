@@ -8,6 +8,8 @@ from os.path import join
 import unittest
 
 from pymatgen.core.structure import Molecule
+from pymatgen.analysis.graphs import MoleculeGraph
+from pymatgen.analysis.local_env import CovalentBondNN
 from pymatgen.io.qchem.utils import map_atoms_reaction
 # from pymatgen.util.testing import PymatgenTest
 
@@ -38,7 +40,14 @@ class QCUtilsTest(unittest.TestCase):
         del self.pro
 
     def test_map_atoms_reaction(self):
-        mapping = map_atoms_reaction([self.rct_1, self.rct_2], self.pro)
+        rct_1 = MoleculeGraph.with_local_env_strategy(self.rct_1, CovalentBondNN(),
+                                                      reorder=False, extend_structure=False)
+        rct_2 = MoleculeGraph.with_local_env_strategy(self.rct_2, CovalentBondNN(),
+                                                      reorder=False, extend_structure=False)
+        pro = MoleculeGraph.with_local_env_strategy(self.pro, CovalentBondNN(),
+                                                    reorder=False, extend_structure=False)
+
+        mapping = map_atoms_reaction([rct_1, rct_2], pro)
 
         self.assertDictEqual(mapping, {6: 0, 2: 1, 4: 2, 7: 3, 10: 4, 14: 5, 15: 6, 16: 7, 18: 8,
                                        3: 9, 8: 10, 0: 11, 9: 12, 5: 13, 1: 14, 11: 15, 17: 16,

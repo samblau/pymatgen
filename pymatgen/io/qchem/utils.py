@@ -5,8 +5,6 @@ import itertools
 from difflib import SequenceMatcher
 from statistics import mean
 
-from pymatgen.analysis.graphs import MoleculeGraph
-from pymatgen.analysis.local_env import CovalentBondNN
 import networkx.algorithms.isomorphism as iso
 
 
@@ -278,11 +276,9 @@ def map_atoms_reaction(reactants, product):
     Create a mapping of atoms between a set of reactant Molecules and a product
     Molecule.
 
-    :param reactants: list of Molecule objects representing the reaction
+    :param reactants: list of MoleculeGraph objects representing the reaction
         reactants
-    :param product: Molecule object representing the reaction product
-
-    The mapping returned is
+    :param product: MoleculeGraph object representing the reaction product
 
     NOTE: This currently only works with one product
 
@@ -299,24 +295,17 @@ def map_atoms_reaction(reactants, product):
             result[num] = ranking[1:]
         return result
 
-    rct_mgs = list()
-    for reactant in reactants:
-        rct_mgs.append(MoleculeGraph.with_local_env_strategy(reactant, CovalentBondNN(), reorder=False,
-                                                             extend_structure=False))
-    pro_mg = MoleculeGraph.with_local_env_strategy(product, CovalentBondNN(), reorder=False,
-                                                   extend_structure=False)
-
     # Next, try to construct isomorphisms between reactant and product
     nm = iso.categorical_node_match("specie", "ERROR")
     # Prefer undirected graphs
-    rct_graphs = [rct_mg.graph.to_undirected() for rct_mg in rct_mgs]
-    pro_graph = pro_mg.graph.to_undirected()
+    rct_graphs = [rct.graph.to_undirected() for rct in reactants]
+    pro_graph = product.graph.to_undirected()
 
-    pro_dists = get_ranked_atom_dists(pro_mg.molecule)
+    pro_dists = get_ranked_atom_dists(product.molecule)
     ranking_by_reactant = list()
     for e, rct_graph in enumerate(rct_graphs):
 
-        meta_iso = {e: set() for e in range(len(pro_mg.molecule))}
+        meta_iso = {e: set() for e in range(len(product.molecule))}
         matcher = iso.GraphMatcher(pro_graph, rct_graph, node_match=nm)
 
         # Compile all isomorphisms
@@ -334,7 +323,7 @@ def map_atoms_reaction(reactants, product):
                 disputed_nodes.add(pro_node)
 
         average_ratios = list()
-        rct_dists = get_ranked_atom_dists(reactants[e])
+        rct_dists = get_ranked_atom_dists(reactants[e].molecule)
         for isomorphism in isomorphisms:
             ratios = list()
 
