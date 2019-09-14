@@ -691,6 +691,11 @@ class QCOutput(MSONable):
                 terminate_on_match=True).get('key') == [[]]:
             self.data["warnings"]["diagonalizing_BBt"] = True
 
+        # Check for bad Roothaan step
+        for scf in self.data["SCF"]:
+            if abs(scf[0][0] - scf[1][0]) > 10.0:
+                self.data["warnings"]["bad_roothaan"] = True
+
     def _read_geometries(self):
         """
         Parses all geometries from an optimization trajectory.
@@ -1139,6 +1144,9 @@ class QCOutput(MSONable):
         molecule_max_energy = stringfile_parser.data["molecules"][max_index]
         self.data["string_max_energy"] = string_max_energy
         self.data["string_ts_guess"] = molecule_max_energy
+
+    def _read_force_data(self):
+        self._read_gradients()
 
     def _read_pcm_information(self):
         """
