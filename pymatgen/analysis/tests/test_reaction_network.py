@@ -49,12 +49,12 @@ class TestReactionNetwork(PymatgenTest):
 
     def test_LiEC_entries(self):
         RN = ReactionNetwork(self.LiEC_entries, free_energy_cutoff=40.0)
-        self.assertEqual(RN.entries_list[208].free_energy,-9522.907225166065)
-        self.assertEqual(RN.entries_list[208],RN.entries["C3 H4 Li1 O3"][11][0][0])
-        self.assertEqual(len(RN.entries_list),236)
-        self.assertEqual(len(RN.graph.nodes),1440)
-        # self.assertEqual(len(RN.graph.edges),3430)
-        self.assertEqual(len(RN.graph.edges),3322)
+        self.assertEqual(RN.entries_list[208].free_energy(), -9522.907225166065)
+        self.assertEqual(RN.entries_list[208], RN.entries["C3 H4 Li1 O3"][11][0][0])
+        self.assertEqual(len(RN.entries_list), 236)
+        self.assertEqual(len(RN.graph.nodes), 1440)
+        # self.assertEqual(len(RN.graph.edges), 3430)
+        self.assertEqual(len(RN.graph.edges), 3322)
 
     def test_LiEC_extended_entries(self):
         RN = ReactionNetwork(self.LiEC_extended_entries)

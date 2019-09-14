@@ -55,7 +55,7 @@ class ReactionNetwork(MSONable):
         self.prereq_const = 50
         self.path_length_cutoff = 50
 
-        print(len(entries),"total entries")
+        print(len(entries), "total entries")
 
         get_formula = lambda x: x.formula
         get_Nbonds = lambda x: x.Nbonds
@@ -78,12 +78,12 @@ class ReactionNetwork(MSONable):
                                 if entry.mol_graph.isomorphic_to(Uentry.mol_graph):
                                     isomorphic_found = True
                                     # print("Isomorphic entries with equal charges found!")
-                                    if entry.free_energy != None and Uentry.free_energy != None:
-                                        if entry.free_energy < Uentry.free_energy:
+                                    if entry.free_energy() is not None and Uentry.free_energy() is not None:
+                                        if entry.free_energy() < Uentry.free_energy():
                                             unique[ii] = entry
                                             if entry.energy > Uentry.energy:
                                                 print("WARNING: Free energy lower but electronic energy higher!")
-                                    elif entry.free_energy != None:
+                                    elif entry.free_energy() is not None:
                                         unique[ii] = entry
                                     elif entry.energy < Uentry.energy:
                                         unique[ii] = entry
@@ -96,7 +96,7 @@ class ReactionNetwork(MSONable):
                     for entry in self.entries[k1][k2][k3]:
                         self.entries_list.append(entry)
 
-        print(len(self.entries_list),"unique entries")
+        print(len(self.entries_list), "unique entries")
 
         for ii, entry in enumerate(self.entries_list):
             entry.parameters["ind"] = ii
@@ -198,7 +198,7 @@ class ReactionNetwork(MSONable):
                                 except MolGraphSplitError:
                                     pass
 
-    def add_reaction(self,entries0,entries1,rxn_type):
+    def add_reaction(self, entries0, entries1, rxn_type):
         """
         Args:
             entries0 ([MoleculeEntry]): list of MoleculeEntry objects on one side of the reaction
@@ -242,9 +242,9 @@ class ReactionNetwork(MSONable):
             node_name_B = str(entry1.parameters["ind"])+","+str(entry0.parameters["ind"])
             energy_A = entry1.energy-entry0.energy
             energy_B = entry0.energy-entry1.energy
-            if entry1.free_energy != None and entry0.free_energy != None:
-                free_energy_A = entry1.free_energy-entry0.free_energy
-                free_energy_B = entry0.free_energy-entry1.free_energy
+            if entry1.free_energy() is not None and entry0.free_energy() is not None:
+                free_energy_A = entry1.free_energy() - entry0.free_energy()
+                free_energy_B = entry0.free_energy() - entry1.free_energy()
                 if rxn_type == "one_electron_redox":
                     if rxn_type_A == "One electron reduction":
                         free_energy_A += -self.electron_free_energy
@@ -295,9 +295,9 @@ class ReactionNetwork(MSONable):
             rxn_type_B = "Molecular formation from one new bond A+B -> C"
             energy_A = entry0.energy + entry1.energy - entry.energy
             energy_B = entry.energy - entry0.energy - entry1.energy
-            if entry1.free_energy != None and entry0.free_energy != None and entry.free_energy != None:
-                free_energy_A = entry0.free_energy + entry1.free_energy - entry.free_energy
-                free_energy_B = entry.free_energy - entry0.free_energy - entry1.free_energy
+            if entry1.free_energy() is not None and entry0.free_energy() is not None and entry.free_energy() is not None:
+                free_energy_A = entry0.free_energy() + entry1.free_energy() - entry.free_energy()
+                free_energy_B = entry.free_energy() - entry0.free_energy() - entry1.free_energy()
 
             self.graph.add_node(node_name_A,rxn_type=rxn_type_A,bipartite=1,energy=energy_A,free_energy=free_energy_A)
             self.graph.add_node(node_name_B,rxn_type=rxn_type_B,bipartite=1,energy=energy_B,free_energy=free_energy_B)
@@ -338,10 +338,10 @@ class ReactionNetwork(MSONable):
                                 exponent=0.0,
                                 weight=1.0)
 
-    def softplus(self,free_energy):
+    def softplus(self, free_energy):
         return np.log(1 + (273.0 / 500.0) * np.exp(free_energy))
 
-    def exponent(self,free_energy):
+    def exponent(self, free_energy):
         return np.exp(free_energy)
 
     def characterize_path(self,path,weight):
