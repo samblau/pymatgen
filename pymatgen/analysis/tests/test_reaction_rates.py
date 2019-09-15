@@ -74,9 +74,11 @@ class ReactionRateCalculatorTest(unittest.TestCase):
         self.assertEqual(self.calc.net_entropy, (self.entropies[2] - (self.entropies[0] +
                                                                       self.entropies[1])))
 
-        gibbs_300 = self.calc.net_enthalpy - 300 * self.calc.net_entropy / 1000
-        self.assertEqual(self.calc.calculate_net_gibbs(300.00), gibbs_300)
-        gibbs_100 = self.calc.net_enthalpy - 100 * self.calc.net_entropy / 1000
+        gibbs_300 = (self.pro.free_energy(300) - (self.rct_1.free_energy(300)
+                                                  + self.rct_2.free_energy(300))) * 23.061
+        self.assertEqual(self.calc.calculate_net_gibbs(300), gibbs_300)
+        gibbs_100 = (self.pro.free_energy(100) - (self.rct_1.free_energy(100)
+                                                  + self.rct_2.free_energy(100))) * 23.061
         self.assertEqual(self.calc.calculate_net_gibbs(100.00), gibbs_100)
 
         self.assertDictEqual(self.calc.calculate_net_thermo(), {"energy": self.calc.net_energy,
@@ -110,9 +112,9 @@ class ReactionRateCalculatorTest(unittest.TestCase):
         self.assertEqual(self.calc.calculate_act_entropy(reverse=True),
                          trans_entropy - sum(pro_entropies))
 
-        gibbs_300 = self.calc.calculate_act_enthalpy() - 300 * self.calc.calculate_act_entropy() / 1000
-        gibbs_300_rev = self.calc.calculate_act_enthalpy(reverse=True) - 300 * self.calc.calculate_act_entropy(reverse=True) / 1000
-        gibbs_100 = self.calc.calculate_act_enthalpy() - 100 * self.calc.calculate_act_entropy() / 1000
+        gibbs_300 = self.calc.calculate_act_energy() * 627.509 + self.calc.calculate_act_enthalpy() - 300 * self.calc.calculate_act_entropy() / 1000
+        gibbs_300_rev = self.calc.calculate_act_energy(reverse=True) * 627.509 + self.calc.calculate_act_enthalpy(reverse=True) - 300 * self.calc.calculate_act_entropy(reverse=True) / 1000
+        gibbs_100 = self.calc.calculate_act_energy() * 627.509 + self.calc.calculate_act_enthalpy() - 100 * self.calc.calculate_act_entropy() / 1000
         self.assertEqual(self.calc.calculate_act_gibbs(300), gibbs_300)
         self.assertEqual(self.calc.calculate_act_gibbs(300, reverse=True), gibbs_300_rev)
         self.assertEqual(self.calc.calculate_act_gibbs(100), gibbs_100)
@@ -239,16 +241,16 @@ class ExpandedBEPReactionRateCalculatorTest(unittest.TestCase):
                                  entropy=self.entropies[2])
 
         self.calc = ExpandedBEPRateCalculator([self.rct_1, self.rct_2], [self.pro],
-                                              15.0, -15.0, -48.0)
+                                              15.0, -0.005, -15.0, -48.0)
 
     def test_act_properties(self):
 
-        delta_g_ref = self.calc.delta_h_reference - 300 * self.calc.delta_s_reference / 1000
-        delta_g = self.calc.net_enthalpy - 300 * self.calc.net_entropy / 1000
-        delta_g_rev = -self.calc.net_enthalpy + 300 * self.calc.net_entropy / 1000
+        delta_g_ref = self.calc.delta_e_reference * 627.509 + self.calc.delta_h_reference - 300 * self.calc.delta_s_reference / 1000
+        delta_g = self.calc.calculate_net_gibbs(300)
+        delta_g_rev = -delta_g
 
-        delta_g_ref_600 = self.calc.delta_h_reference - 600 * self.calc.delta_s_reference / 1000
-        delta_g_600 = self.calc.net_enthalpy - 600 * self.calc.net_entropy / 1000
+        delta_g_ref_600 = self.calc.delta_e_reference * 627.509 + self.calc.delta_h_reference - 600 * self.calc.delta_s_reference / 1000
+        delta_g_600 = self.calc.calculate_net_gibbs(600)
 
         self.assertAlmostEqual(self.calc.calculate_act_gibbs(300),
                                self.calc.delta_ga_reference + self.calc.alpha * (delta_g - delta_g_ref))

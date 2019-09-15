@@ -126,7 +126,11 @@ class ReactionRateCalculator:
             float: net Gibbs free energy (in kcal/mol)
         """
 
-        return self.net_enthalpy - temperature * self.net_entropy / 1000
+        rct_gibbs = [r.free_energy(temp=temperature) for r in self.reactants]
+        pro_gibbs = [p.free_energy(temp=temperature) for p in self.products]
+
+        # Convert from eV (MoleculeEntry default) to kcal/mol
+        return (sum(pro_gibbs) - sum(rct_gibbs)) * 23.061
 
     def calculate_net_thermo(self, temperature=300.0):
         """
@@ -227,7 +231,13 @@ class ReactionRateCalculator:
             float: Gibbs free energy of activation (in kcal/mol)
         """
 
-        return self.calculate_act_enthalpy(reverse=reverse) - temperature * self.calculate_act_entropy(reverse=reverse) / 1000
+        # Convert from Hartree to kcal/mol
+        act_energy = self.calculate_act_energy(reverse=reverse) * 627.509
+        act_enthalpy = self.calculate_act_enthalpy(reverse=reverse)
+        # Convert from cal/mol-K to kcal/mol-K
+        act_entropy = self.calculate_act_entropy(reverse=reverse) / 1000
+
+        return act_energy + act_enthalpy - temperature * act_entropy
 
     def calculate_act_thermo(self, temperature=300.0, reverse=False):
         """
@@ -264,9 +274,10 @@ class ReactionRateCalculator:
             k_rate (float): temperature-dependent rate constant
         """
 
-        gibbs = self.calculate_act_gibbs(temperature=temperature, reverse=reverse)
+        # Convert from kcal/mol to J/mol
+        gibbs = self.calculate_act_gibbs(temperature=temperature, reverse=reverse) * 4184
 
-        k_rate = kappa * k * temperature / h * np.exp(-gibbs * 4184 / (R * temperature))
+        k_rate = kappa * k * temperature / h * np.exp(-gibbs / (R * temperature))
         return k_rate
 
     def calculate_rate(self, concentrations, temperature=300.0, reverse=False, kappa=1.0):
@@ -282,7 +293,7 @@ class ReactionRateCalculator:
             reverse (bool): if True (default False), consider the reverse reaction; otherwise,
                 consider the forwards reaction
             kappa (float): transmission coefficient (by default, we assume the assumptions of
-                transition-state theory are valid, so kappa = 1
+                transition-state theory are valid, so kappa = 1)
 
         Returns:
             rate (float): reaction rate, based on the stoichiometric rate law and the rate constant
@@ -335,9 +346,6 @@ class BEPRateCalculator(ReactionRateCalculator):
 
     def __init__(self, reactants, products, ea_reference, delta_h_reference, reaction=None,
                  alpha=0.5):
-        """
-
-        """
 
         self.ea_reference = ea_reference
         self.delta_h_reference = delta_h_reference
@@ -367,19 +375,19 @@ class BEPRateCalculator(ReactionRateCalculator):
 
     def calculate_act_enthalpy(self, reverse=False):
         raise NotImplementedError("Method calculate_act_enthalpy is not valid for "
-                                  "BellEvansPolanyiRateCalculator,")
+                                  "BEPRateCalculator,")
 
     def calculate_act_entropy(self, reverse=False):
         raise NotImplementedError("Method calculate_act_entropy is not valid for "
-                                  "BellEvansPolanyiRateCalculator,")
+                                  "BEPRateCalculator,")
 
     def calculate_act_gibbs(self, temperature, reverse=False):
         raise NotImplementedError("Method calculate_act_gibbs is not valid for "
-                                  "BellEvansPolanyiRateCalculator,")
+                                  "BEPRateCalculator,")
 
     def calculate_activation_thermo(self, temperature=300.0, reverse=False):
         raise NotImplementedError("Method calculate_activation_thermo is not valid for "
-                                  "BellEvansPolanyiRateCalculator,")
+                                  "BEPRateCalculator,")
 
     def calculate_rate_constant(self, temperature=300.0, reverse=False, kappa=None):
         """
@@ -395,9 +403,10 @@ class BEPRateCalculator(ReactionRateCalculator):
             k_rate (float): temperature-dependent rate constant
         """
 
-        ea = self.calculate_act_energy(reverse=reverse)
+        # Convert from kcal/mol to J/mol
+        ea = self.calculate_act_energy(reverse=reverse) * 4184
 
-        k_rate = np.exp(-ea * 4184 / (R * temperature))
+        k_rate = np.exp(-ea / (R * temperature))
 
         return k_rate
 
@@ -428,7 +437,7 @@ class BEPRateCalculator(ReactionRateCalculator):
         masses = [m.composition.weight for m in mols]
         exponents = np.abs(np.array([self.reaction.get_coeff(mol.composition) for mol in mols]))
 
-        # Have to convert to m from Angstrom
+        # Convert from Angstrom to m
         radius_factor = pi * sum([(np.max(mol.distance_matrix) * (10 ** -10) / 2) for mol in mols]) ** 2
 
         total_exponent = sum(exponents)
@@ -475,7 +484,8 @@ class ExpandedBEPRateCalculator(ReactionRateCalculator):
     Args:
         reactants (list): list of MoleculeEntry objects
         products (list): list of MoleculeEntry objects
-        delta_ga_reference (float): activation energy reference point (in kcal/mol)
+        delta_ga_reference (float): activation free energy reference point (in kcal/mol)
+        delta_e_reference (float): reaction energy reference point (in Hartree)
         delta_h_reference (float): reaction enthalpy reference point (in kcal/mol)
         delta_s_reference (float): reaction entropy reference point (in cal/mol-K)
         reaction (dict, or None): optional. If None (default), the "reactants" and
@@ -485,13 +495,14 @@ class ExpandedBEPRateCalculator(ReactionRateCalculator):
         alpha (float): the reaction coordinate (must between 0 and 1)
     """
 
-    def __init__(self, reactants, products, delta_ga_reference, delta_h_reference, delta_s_reference,
-                 reaction=None, alpha=0.5):
+    def __init__(self, reactants, products, delta_ga_reference, delta_e_reference,
+                 delta_h_reference, delta_s_reference, reaction=None, alpha=0.5):
         """
 
         """
 
         self.delta_ga_reference = delta_ga_reference
+        self.delta_e_reference = delta_e_reference
         self.delta_h_reference = delta_h_reference
         self.delta_s_reference = delta_s_reference
         self.alpha = alpha
@@ -500,15 +511,15 @@ class ExpandedBEPRateCalculator(ReactionRateCalculator):
 
     def calculate_act_energy(self, reverse=False):
         raise NotImplementedError("Method calculate_act_energy is not valid for "
-                                  "BellEvansPolanyiRateCalculator,")
+                                  "ExpandedBEPRateCalculator,")
 
     def calculate_act_enthalpy(self, reverse=False):
         raise NotImplementedError("Method calculate_act_enthalpy is not valid for "
-                                  "BellEvansPolanyiRateCalculator,")
+                                  "ExpandedBEPRateCalculator,")
 
     def calculate_act_entropy(self, reverse=False):
         raise NotImplementedError("Method calculate_act_entropy is not valid for "
-                                  "BellEvansPolanyiRateCalculator,")
+                                  "ExpandedBEPCalculator,")
 
     def calculate_act_gibbs(self, temperature, reverse=False):
         """
@@ -526,14 +537,16 @@ class ExpandedBEPRateCalculator(ReactionRateCalculator):
         """
 
         if reverse:
-            enthalpy = -self.net_enthalpy
-            entropy = -self.net_entropy
+            delta_g = -self.calculate_net_gibbs(temperature)
         else:
-            enthalpy = self.net_enthalpy
-            entropy = self.net_entropy
+            delta_g = self.calculate_net_gibbs(temperature)
 
-        delta_g_ref = self.delta_h_reference - temperature * self.delta_s_reference / 1000
-        delta_g = enthalpy - temperature * entropy / 1000
+        # Convert Hartree to kcal/mol
+        e_ref = self.delta_e_reference * 627.509
+        # Convert cal/mol-K to kcal/mol-K
+        s_ref = self.delta_s_reference / 1000
+
+        delta_g_ref = e_ref + self.delta_h_reference - temperature * s_ref
 
         delta_ga = self.delta_ga_reference + self.alpha * (delta_g - delta_g_ref)
 
@@ -558,9 +571,10 @@ class ExpandedBEPRateCalculator(ReactionRateCalculator):
             k_rate (float): temperature-dependent rate constant
         """
 
-        gibbs = self.calculate_act_gibbs(temperature=temperature, reverse=reverse)
+        # Convert kcal/mol to J/mol
+        gibbs = self.calculate_act_gibbs(temperature=temperature, reverse=reverse) * 4184
 
-        k_rate = kappa * k * temperature / h * np.exp(-gibbs * 4184 / (R * temperature))
+        k_rate = kappa * k * temperature / h * np.exp(-gibbs / (R * temperature))
         return k_rate
 
 
