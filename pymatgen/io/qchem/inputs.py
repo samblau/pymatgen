@@ -276,7 +276,20 @@ class QCInput(MSONable):
                                                      for _ in range(3)]))
 
         total_charge = int(sum([mol.charge for mol in products]))
-        total_spin = sum([mol.spin_multiplicity for mol in products])
+        if len(products) == 1:
+            total_spin = products[0].spin_multiplicity
+        elif len(reactants) == 1:
+            total_spin = reactants[0].spin_multiplicity
+        else:
+            species = list()
+            coords = list()
+            charge = total_charge
+            for mol in products:
+                for site in mol:
+                    species.append(site.species)
+                    coords.append(site.coords)
+            total_mol = Molecule(species, coords, charge=charge)
+            total_spin = total_mol.spin_multiplicity
         mol_list.append(" {charge} {spin_mult}".format(
             charge=total_charge,
             spin_mult=total_spin))
