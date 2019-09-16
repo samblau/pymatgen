@@ -275,6 +275,8 @@ class QCInput(MSONable):
                 pro.translate_sites(vector=np.array([pro_dist_sum + diameter + 1
                                                      for _ in range(3)]))
 
+            pro_dist_sum += diameter + 1
+
         total_charge = int(sum([mol.charge for mol in products]))
         if len(products) == 1:
             total_spin = products[0].spin_multiplicity
