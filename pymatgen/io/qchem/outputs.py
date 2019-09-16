@@ -1145,6 +1145,18 @@ class QCOutput(MSONable):
         self.data["string_max_energy"] = string_max_energy
         self.data["string_ts_guess"] = molecule_max_energy
 
+    def _read_growing_string_data(self):
+        """
+        Parses information from growing string method (GSM) calculation to predict the transition state of the reaction.
+        :return:
+        """
+
+        dirname = os.path.dirname(self.filename)
+
+        vfile_parser = QCVFileParser(filename=os.path.join(dirname, "Vfile.txt"), method="gsm")
+        perpgradfile_parser = QCPerpGradFileParser(filename=os.path.join(dirname,
+                                                                         "perp_grad_file.txt"), method="gsm")
+
     def _read_force_data(self):
         self._read_gradients()
 
@@ -1298,7 +1310,7 @@ class QCOutput(MSONable):
 
 class QCVFileParser:
 
-    def __init__(self, filename="Vfile.txt"):
+    def __init__(self, filename="Vfile.txt", method="fsm"):
         self.filename = filename
         self.data = dict()
         self.text = str()
@@ -1306,6 +1318,14 @@ class QCVFileParser:
         with zopen(filename, 'rt') as f:
             self.text = f.read()
 
+        if method == "fsm":
+            self._parse_fsm()
+        elif method == "gsm":
+            self._parse_gsm()
+        else:
+            raise ValueError("QCVFileParser is only designed for FSM and GSM jobs!")
+
+    def _parse_fsm(self):
         header_pattern = r"#\s+Energy\s+profile\s*"
         row_pattern = r"\s*\d+\s+(?P<distance_abs>[0-9\.]+)\s+(?P<distance_prop>[01]\.[0-9]+)\s+(?P<energy_abs>[\-\.0-9]+)\s+(?P<energy_rel>[\-\.0-9]+)\s*"
         footer_pattern = r""
@@ -1324,10 +1344,36 @@ class QCVFileParser:
             self.data["absolute_distances"].append(float(row["distance_abs"]))
             self.data["proportional_distances"].append(float(row["distance_prop"]))
             self.data["image_energies"].append(float(row["energy_abs"]))
+            # Relative energy in eV
             self.data["relative_energies"].append(float(row["energy_rel"]))
 
+    def _parse_gsm(self):
+        header_pattern = r"\s*Energy profile vs Iteration \(eV\)\s*Iteration\s+node 1\s+node 2\s+\.\.\."
+        row_pattern = r"(?:[0-9]+)\s+(?P<node_rel_energies>(?:(?:\-?[0-9]+\.[0-9]+\s*)|(?:\s*--\s*))+)"
+        footer_pattern = r""
+
+        temp_data = read_table_pattern(self.text,
+                                       header_pattern=header_pattern,
+                                       row_pattern=row_pattern,
+                                       footer_pattern=footer_pattern)
+
+        self.num_iterations = len(temp_data[0])
+        self.data["rel_energies"] = list()
+        for row in temp_data[0]:
+            words = row["node_rel_energies"].split(" ")
+            rel_energies = list()
+            for word in words:
+                if word in ["", "\n"]:
+                    continue
+                elif word == "--":
+                    rel_energies.append(None)
+                else:
+                    rel_energies.append(float(word))
+            self.rel_energies.append(rel_energies)
+        self.final_rel_energies = self.rel_energies[-1]
+
     def as_dict(self):
-        d = {}
+        d = dict()
         d["data"] = self.data
         d["text"] = self.text
         d["filename"] = self.filename

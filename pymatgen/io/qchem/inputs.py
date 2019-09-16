@@ -118,9 +118,7 @@ class QCInput(MSONable):
         #   - Has a method or DFT exchange functional
         #   - Has a valid job_type or jobtype
 
-        valid_job_types = [
-            "opt", "optimization", "sp", "freq", "frequency", "force", "fsm", "nmr", "ts"
-        ]
+        valid_job_types = ["opt", "optimization", "sp", "freq", "frequency", "force", "fsm", "nmr", "ts", "gsm"]
 
         if "basis" not in self.rem:
             raise ValueError("The rem dictionary must contain a 'basis' entry")
