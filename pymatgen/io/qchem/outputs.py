@@ -1505,7 +1505,7 @@ class QCPerpGradFileParser:
 
     def _parse_fsm(self):
         header_pattern = r"\s*#\s*perp_grad\s+magnitudes\s*"
-        row_pattern = r"\s*\d+\s+(?P<distance_abs>[0-9\.]+)\s+(?P<distance_prop>[01]\.[0-9]+)\s+(?P<grad_mag>[\.\-na0-9]+)\s*"
+        row_pattern = r"\s*\d+\s+(?P<distance_abs>[0-9\.]+)\s+(?P<distance_prop>[01]\.[0-9]+)\s+(?P<grad_mag>[\.\-naif0-9]+)\s*"
         footer_pattern = r""
 
         temp_data = read_table_pattern(self.text,
@@ -1518,7 +1518,7 @@ class QCPerpGradFileParser:
         self.data["proportional_distances"] = list()
         self.data["gradient_magnitudes"] = list()
         for row in temp_data[0]:
-            if "nan" in row["grad_mag"]:
+            if "nan" in row["grad_mag"] or "inf" in row["grad_mag"]:
                 grad_mag = math.inf
             else:
                 grad_mag = float(row["grad_mag"])
