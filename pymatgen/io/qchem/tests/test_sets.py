@@ -4,14 +4,11 @@
 
 
 import unittest
-import os
-
-from pymatgen import Molecule
 from pymatgen.io.qchem.sets import *
 from pymatgen.util.testing import PymatgenTest
 from pymatgen.io.qchem.inputs import QCInput
 
-__author__ = "Samuel Blau, Brandon Wood, Shyam Dwaraknath"
+__author__ = "Samuel Blau, Brandon Wood, Shyam Dwaraknath, Evan Spotte-Smith"
 __copyright__ = "Copyright 2018, The Materials Project"
 __version__ = "0.1"
 
@@ -432,94 +429,6 @@ class TransitionStateSetTest(PymatgenTest):
         self.assertEqual(test_TSSet.molecule, test_molecule)
 
 
-class FreezingStringSetTest(PymatgenTest):
-    def test_init(self):
-        test_molecule = QCInput.from_file(
-            os.path.join(mol_dir, "new_qchem_files/fsm.qin")).molecule
-
-        test_FSMSet = FreezingStringSet(molecule=test_molecule)
-        self.assertEqual(test_FSMSet.rem, {
-                'job_type': 'fsm',
-                'gen_scfman': 'true',
-                'basis': 'def2-tzvppd',
-                'max_scf_cycles': 200,
-                'method': 'wb97xd',
-                'scf_algorithm': 'diis_gdm',
-                'xc_grid': '3',
-                'fsm_mode': 2,
-                'fsm_ngrad': 4,
-                'fsm_nnode': 15,
-                'fsm_opt_mode': 2,
-                'resp_charges': 'true',
-                'sym_ignore': 'true',
-                'symmetry': 'false'
-            })
-        self.assertEqual(test_FSMSet.pcm, {})
-        self.assertEqual(test_FSMSet.solvent, {})
-        self.assertEqual(test_FSMSet.molecule, test_molecule)
-
-    def test_pcm_init(self):
-        test_molecule = QCInput.from_file(
-            os.path.join(mol_dir, "new_qchem_files/fsm.qin")).molecule
-        test_FSMSet = FreezingStringSet(molecule=test_molecule,
-                                        pcm_dielectric=10.0)
-        self.assertEqual(
-            test_FSMSet.rem, {
-                'job_type': 'fsm',
-                'gen_scfman': 'true',
-                'basis': 'def2-tzvppd',
-                'max_scf_cycles': 200,
-                'method': 'wb97xd',
-                'scf_algorithm': 'diis_gdm',
-                'xc_grid': '3',
-                'solvent_method': 'pcm',
-                'fsm_mode': 2,
-                'fsm_ngrad': 4,
-                'fsm_nnode': 15,
-                'fsm_opt_mode': 2,
-                'resp_charges': 'true',
-                'sym_ignore': 'true',
-                'symmetry': 'false'
-            })
-        self.assertEqual(
-            test_FSMSet.pcm, {
-                'heavypoints': '194',
-                'hpoints': '194',
-                'radii': 'uff',
-                'theory': 'cpcm',
-                'vdwscale': '1.1'
-            })
-        self.assertEqual(test_FSMSet.solvent, {'dielectric': 10.0})
-        self.assertEqual(test_FSMSet.molecule, test_molecule)
-
-    def test_smd_init(self):
-        test_molecule = QCInput.from_file(
-            os.path.join(mol_dir, "new_qchem_files/fsm.qin")).molecule
-        test_FSMSet = FreezingStringSet(molecule=test_molecule,
-                                        smd_solvent='water')
-        self.assertEqual(
-            test_FSMSet.rem, {
-                'job_type': 'fsm',
-                'gen_scfman': 'true',
-                'basis': 'def2-tzvppd',
-                'max_scf_cycles': 200,
-                'method': 'wb97xd',
-                'scf_algorithm': 'diis_gdm',
-                'xc_grid': '3',
-                'solvent_method': 'smd',
-                'ideriv': '1',
-                'fsm_mode': 2,
-                'fsm_ngrad': 4,
-                'fsm_nnode': 15,
-                'fsm_opt_mode': 2,
-                'resp_charges': 'true',
-                'sym_ignore': 'true',
-                'symmetry': 'false'
-            })
-        self.assertEqual(test_FSMSet.smx, {'solvent': 'water'})
-        self.assertEqual(test_FSMSet.molecule, test_molecule)
-
-
 class SinglePointSetTest(PymatgenTest):
     def test_init(self):
         test_molecule = QCInput.from_file(
@@ -667,6 +576,182 @@ class FreqSetTest(PymatgenTest):
             })
         self.assertEqual(test_FreqSet.smx, {'solvent': 'water'})
         self.assertEqual(test_FreqSet.molecule, test_molecule)
+
+
+class FreezingStringSetTest(PymatgenTest):
+    def test_init(self):
+        test_molecule = QCInput.from_file(
+            os.path.join(mol_dir, "new_qchem_files/fsm/fsm.qin")).molecule
+
+        test_FSMSet = FreezingStringSet(molecule=test_molecule)
+        self.assertEqual(test_FSMSet.rem, {
+                'job_type': 'fsm',
+                'gen_scfman': 'true',
+                'basis': 'def2-tzvppd',
+                'max_scf_cycles': 200,
+                'method': 'wb97xd',
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
+                'fsm_mode': 2,
+                'fsm_ngrad': 4,
+                'fsm_nnode': 15,
+                'fsm_opt_mode': 2,
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
+            })
+        self.assertEqual(test_FSMSet.pcm, {})
+        self.assertEqual(test_FSMSet.solvent, {})
+        self.assertEqual(test_FSMSet.molecule, test_molecule)
+
+    def test_pcm_init(self):
+        test_molecule = QCInput.from_file(
+            os.path.join(mol_dir, "new_qchem_files/fsm/fsm.qin")).molecule
+        test_FSMSet = FreezingStringSet(molecule=test_molecule,
+                                        pcm_dielectric=10.0)
+        self.assertEqual(
+            test_FSMSet.rem, {
+                'job_type': 'fsm',
+                'gen_scfman': 'true',
+                'basis': 'def2-tzvppd',
+                'max_scf_cycles': 200,
+                'method': 'wb97xd',
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
+                'solvent_method': 'pcm',
+                'fsm_mode': 2,
+                'fsm_ngrad': 4,
+                'fsm_nnode': 15,
+                'fsm_opt_mode': 2,
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
+            })
+        self.assertEqual(
+            test_FSMSet.pcm, {
+                'heavypoints': '194',
+                'hpoints': '194',
+                'radii': 'uff',
+                'theory': 'cpcm',
+                'vdwscale': '1.1'
+            })
+        self.assertEqual(test_FSMSet.solvent, {'dielectric': 10.0})
+        self.assertEqual(test_FSMSet.molecule, test_molecule)
+
+    def test_smd_init(self):
+        test_molecule = QCInput.from_file(
+            os.path.join(mol_dir, "new_qchem_files/fsm/fsm.qin")).molecule
+        test_FSMSet = FreezingStringSet(molecule=test_molecule,
+                                        smd_solvent='water')
+        self.assertEqual(
+            test_FSMSet.rem, {
+                'job_type': 'fsm',
+                'gen_scfman': 'true',
+                'basis': 'def2-tzvppd',
+                'max_scf_cycles': 200,
+                'method': 'wb97xd',
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
+                'solvent_method': 'smd',
+                'ideriv': '1',
+                'fsm_mode': 2,
+                'fsm_ngrad': 4,
+                'fsm_nnode': 15,
+                'fsm_opt_mode': 2,
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
+            })
+        self.assertEqual(test_FSMSet.smx, {'solvent': 'water'})
+        self.assertEqual(test_FSMSet.molecule, test_molecule)
+
+
+class GrowingStringSetTest(PymatgenTest):
+    def test_init(self):
+        test_molecule = QCInput.from_file(
+            os.path.join(mol_dir, "new_qchem_files/gsm/gsm.qin")).molecule
+
+        test_FSMSet = FreezingStringSet(molecule=test_molecule)
+        self.assertEqual(test_FSMSet.rem, {
+                'job_type': 'gsm',
+                'gen_scfman': 'true',
+                'basis': 'def2-tzvppd',
+                'max_scf_cycles': 200,
+                'method': 'wb97xd',
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
+                'fsm_mode': 2,
+                'fsm_ngrad': 4,
+                'fsm_nnode': 15,
+                'fsm_opt_mode': 2,
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
+            })
+        self.assertEqual(test_FSMSet.pcm, {})
+        self.assertEqual(test_FSMSet.solvent, {})
+        self.assertEqual(test_FSMSet.molecule, test_molecule)
+
+    def test_pcm_init(self):
+        test_molecule = QCInput.from_file(
+            os.path.join(mol_dir, "new_qchem_files/gsm/gsm.qin")).molecule
+        test_FSMSet = FreezingStringSet(molecule=test_molecule,
+                                        pcm_dielectric=10.0)
+        self.assertEqual(
+            test_FSMSet.rem, {
+                'job_type': 'gsm',
+                'gen_scfman': 'true',
+                'basis': 'def2-tzvppd',
+                'max_scf_cycles': 200,
+                'method': 'wb97xd',
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
+                'solvent_method': 'pcm',
+                'fsm_mode': 2,
+                'fsm_ngrad': 4,
+                'fsm_nnode': 15,
+                'fsm_opt_mode': 2,
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
+            })
+        self.assertEqual(
+            test_FSMSet.pcm, {
+                'heavypoints': '194',
+                'hpoints': '194',
+                'radii': 'uff',
+                'theory': 'cpcm',
+                'vdwscale': '1.1'
+            })
+        self.assertEqual(test_FSMSet.solvent, {'dielectric': 10.0})
+        self.assertEqual(test_FSMSet.molecule, test_molecule)
+
+    def test_smd_init(self):
+        test_molecule = QCInput.from_file(
+            os.path.join(mol_dir, "new_qchem_files/gsm/gsm.qin")).molecule
+        test_FSMSet = FreezingStringSet(molecule=test_molecule,
+                                        smd_solvent='water')
+        self.assertEqual(
+            test_FSMSet.rem, {
+                'job_type': 'fsm',
+                'gen_scfman': 'true',
+                'basis': 'def2-tzvppd',
+                'max_scf_cycles': 200,
+                'method': 'wb97xd',
+                'scf_algorithm': 'diis_gdm',
+                'xc_grid': '3',
+                'solvent_method': 'smd',
+                'ideriv': '1',
+                'fsm_mode': 2,
+                'fsm_ngrad': 4,
+                'fsm_nnode': 15,
+                'fsm_opt_mode': 2,
+                'resp_charges': 'true',
+                'sym_ignore': 'true',
+                'symmetry': 'false'
+            })
+        self.assertEqual(test_FSMSet.smx, {'solvent': 'water'})
+        self.assertEqual(test_FSMSet.molecule, test_molecule)
 
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@ from pymatgen.io.qchem.utils import lower_and_check_unique
 
 # Classes for reading/manipulating/writing QChem output files.
 
-__author__ = "Samuel Blau, Brandon Wood, Shyam Dwaraknath"
+__author__ = "Samuel Blau, Brandon Wood, Shyam Dwaraknath, Evan Spotte-Smith"
 __copyright__ = "Copyright 2018, The Materials Project"
 __version__ = "0.1"
 
@@ -103,7 +103,7 @@ class QChemDictSet(QCInput):
         if self.job_type.lower() in ["opt", "ts"]:
             myrem["geom_opt_max_cycles"] = self.geom_opt_max_cycles
 
-        if self.job_type.lower() == "fsm":
+        if self.job_type.lower() in ["fsm", "gsm"]:
             myrem["fsm_mode"] = 2
             myrem["fsm_nnode"] = 15
             myrem["fsm_ngrad"] = 4
@@ -293,7 +293,8 @@ class FreqSet(QChemDictSet):
 
 class FreezingStringSet(QChemDictSet):
     """
-    QChemDictSet for a transition-state search
+    QChemDictSet for a freezing-string method (FSM) calculation to guess the
+    transition state of a reaction.
     """
 
     def __init__(self,
@@ -312,6 +313,38 @@ class FreezingStringSet(QChemDictSet):
         super(FreezingStringSet, self).__init__(
             molecule=molecule,
             job_type="fsm",
+            dft_rung=dft_rung,
+            pcm_dielectric=pcm_dielectric,
+            smd_solvent=smd_solvent,
+            custom_smd=custom_smd,
+            basis_set=self.basis_set,
+            scf_algorithm=self.scf_algorithm,
+            max_scf_cycles=self.max_scf_cycles,
+            overwrite_inputs=overwrite_inputs)
+
+
+class GrowingStringSet(QChemDictSet):
+    """
+    QChemDictSet for a growing-string method (GSM) calculation to guess the
+    transition state of a reaction.
+    """
+
+    def __init__(self,
+                 molecule,
+                 dft_rung=3,
+                 basis_set="def2-tzvppd",
+                 pcm_dielectric=None,
+                 smd_solvent=None,
+                 custom_smd=None,
+                 scf_algorithm="diis_gdm",
+                 max_scf_cycles=200,
+                 overwrite_inputs=None):
+        self.basis_set = basis_set
+        self.scf_algorithm = scf_algorithm
+        self.max_scf_cycles = max_scf_cycles
+        super(FreezingStringSet, self).__init__(
+            molecule=molecule,
+            job_type="gsm",
             dft_rung=dft_rung,
             pcm_dielectric=pcm_dielectric,
             smd_solvent=smd_solvent,
