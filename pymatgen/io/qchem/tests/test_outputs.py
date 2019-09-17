@@ -184,8 +184,9 @@ multi_job_out_names = {"not_enough_total_memory.qcout",
 class TestQCOutput(PymatgenTest):
 
     def setUp(self) -> None:
-        self.generate_single_job_dict()
-        self.generate_multi_job_dict()
+        # self.generate_single_job_dict()
+        # self.generate_multi_job_dict()
+        pass
 
     @staticmethod
     def generate_single_job_dict():

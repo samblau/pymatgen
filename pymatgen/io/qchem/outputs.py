@@ -320,6 +320,15 @@ class QCOutput(MSONable):
             self._read_string_geometries()
             self._read_freezing_string_data()
 
+        self.data["growing_string_job"] = read_pattern(
+            self.text, {
+                "key": r"(?i)\s*job(?:_)*type\s*(?:=)*\s*gsm"
+            },
+            terminate_on_match=True).get("key")
+        if self.data.get("growing_string_job", []):
+            self._read_string_geometries()
+            self._read_growing_string_data()
+
         self.data["force_job"] = read_pattern(
             self.text, {
                 "key": r"(?i)\s*job(?:_)*type\s*(?:=)*\s*force"
@@ -1186,6 +1195,7 @@ class QCOutput(MSONable):
                 coords.append([row["x_coord"],
                                row["y_coord"],
                                row["z_coord"]])
+            coords = process_parsed_coords(coords)
             molecules.append(Molecule(species, coords))
             geometries.append(coords)
         self.data["string_molecules"] = molecules
