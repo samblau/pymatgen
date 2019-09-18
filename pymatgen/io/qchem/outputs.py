@@ -1143,7 +1143,12 @@ class QCOutput(MSONable):
         self.data["string_relative_energies"] = vfile_parser.data["relative_energies"]
 
         self.data["string_geometries"] = stringfile_parser.data["geometries"]
-        self.data["string_molecules"] = stringfile_parser.data["molecules"]
+        self.data["string_molecules"] = list()
+        string_mols = stringfile_parser.data["molecules"]
+        for mol in string_mols:
+            mol.set_charge_and_spin(charge=self.data.get("charge"),
+                                    spin_multiplicity=self.data.get("multiplicity"))
+            self.data["string_molecules"].append(mol)
 
         self.data["string_absolute_distances"] = perpgradfile_parser.data["absolute_distances"]
         self.data["string_proportional_distances"] = perpgradfile_parser.data["proportional_distances"]
@@ -1196,7 +1201,9 @@ class QCOutput(MSONable):
                                row["y_coord"],
                                row["z_coord"]])
             coords = process_parsed_coords(coords)
-            molecules.append(Molecule(species, coords))
+            molecules.append(Molecule(species, coords,
+                                      charge=self.data.get("charge"),
+                                      spin_multiplicity=self.data.get("multiplicity")))
             geometries.append(coords)
         self.data["string_molecules"] = molecules
         self.data["string_geometries"] = geometries
@@ -1476,9 +1483,7 @@ class QCStringfileParser:
             self.data["species"] = species
             self.data["geometries"].append(geometry)
             self.data["molecules"].append(Molecule(species=species,
-                                                   coords=geometry,
-                                                   charge=self.data.get("charge"),
-                                                   spin_multiplicity=self.data.get("multiplicity")))
+                                                   coords=geometry))
 
     def as_dict(self):
         d = dict()

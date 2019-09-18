@@ -166,7 +166,8 @@ single_job_out_names = {"unable_to_determine_lambda_in_geom_opt.qcout",
                         "new_qchem_files/1570.qout",
                         "new_qchem_files/1570_2.qout",
                         "new_qchem_files/single_point.qout",
-                        "new_qchem_files/fsm/fsm.qout",
+                        "new_qchem_files/fsm/da/fsm.qout",
+                        "new_qchem_files/fsm/li_ion/mol.qout",
                         "new_qchem_files/gsm/gsm.qout"}
 
 multi_job_out_names = {"not_enough_total_memory.qcout",
@@ -259,7 +260,8 @@ class QCVfileParserTest(PymatgenTest):
                os.path.join(test_dir, "new_qchem_files", "gsm", "vfile.json"))
 
     def test_fsm(self):
-        filename = os.path.join(test_dir, "new_qchem_files", "fsm", "Vfile.txt")
+        filename = os.path.join(test_dir, "new_qchem_files", "fsm", "da",
+                                "Vfile.txt")
 
         with open(filename) as vfile:
             text = vfile.read()
@@ -320,7 +322,8 @@ class QCVfileParserTest(PymatgenTest):
 class QCStringfileParserTest(PymatgenTest):
 
     def test_fsm(self):
-        filename = os.path.join(test_dir, "new_qchem_files", "fsm", "stringfile.txt")
+        filename = os.path.join(test_dir, "new_qchem_files", "fsm", "da",
+                                "stringfile.txt")
 
         # To generate JSON - uncomment if/when changes need to be made
         # data = QCStringfileParser(filename).data
@@ -365,7 +368,7 @@ class QCPerpGradFileParserTest(PymatgenTest):
                os.path.join(test_dir, "new_qchem_files", "gsm", "perp_grad_file.json"))
 
     def test_fsm(self):
-        filename = os.path.join(test_dir, "new_qchem_files", "fsm",
+        filename = os.path.join(test_dir, "new_qchem_files", "fsm", "da",
                                 "perp_grad_file.txt")
 
         with open(filename) as perp_grad_file:
