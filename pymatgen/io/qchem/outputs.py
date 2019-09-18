@@ -1351,7 +1351,7 @@ class QCOutput(MSONable):
             self.data["errors"] += ["unknown_error"]
 
     def as_dict(self):
-        d = {}
+        d = dict()
         d["data"] = self.data
         d["text"] = self.text
         d["filename"] = self.filename
@@ -1476,10 +1476,12 @@ class QCStringfileParser:
             self.data["species"] = species
             self.data["geometries"].append(geometry)
             self.data["molecules"].append(Molecule(species=species,
-                                                   coords=geometry))
+                                                   coords=geometry,
+                                                   charge=self.data.get("charge"),
+                                                   spin_multiplicity=self.data.get("multiplicity")))
 
     def as_dict(self):
-        d = {}
+        d = dict()
         d["data"] = self.data
         d["text"] = self.text
         d["filename"] = self.filename
