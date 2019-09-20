@@ -1,10 +1,11 @@
 import re
 import numpy as np
-from scipy.optimize import fsolve
+from scipy.optimize import leastsq
 from collections import defaultdict
 import itertools
 from difflib import SequenceMatcher
 from statistics import mean
+import copy
 
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
@@ -383,16 +384,16 @@ def coorient(mol_1, mol_2):
     """
 
     def atom_dist(n, vec):
-        return mol_1.molecule.cart_coords[n] - mol_2.molecule.cart_coords[n] + vec
+        return np.linalg.norm(mol_1.molecule.cart_coords[n] - mol_2.molecule.cart_coords[n] + vec)
 
     def all_dists(vec):
-        return [atom_dist(n, vec) for n in range(len(mol_1))]
+        return np.array([atom_dist(n, vec) for n in range(len(mol_1))])
 
     if not mol_1.isomorphic_to(mol_2):
         raise ValueError("Function coorient should only be used on isomorphic "
                          "MoleculeGraphs!")
 
-    return fsolve(all_dists, np.zeros(3))
+    return -1 * leastsq(all_dists, np.zeros(3))[0]
 
 
 def generate_string_start(reactants, product, strategy, reorder=False,
@@ -429,7 +430,8 @@ def generate_string_start(reactants, product, strategy, reorder=False,
     charge = product.charge
     spin = product.spin_multiplicity
     distance = 0
-    for rct in reactants:
+    rcts = copy.deepcopy(reactants)
+    for rct in rcts:
         rct.translate_sites(vector=np.array([distance, distance, distance]))
         for site in rct:
             species.append(site.specie)
@@ -483,7 +485,7 @@ def generate_string_start(reactants, product, strategy, reorder=False,
     vectors = dict()
     for i, com_i in coms.items():
         for j, com_j in coms.items():
-            if i < j:
+            if i < j and (i, j) not in vectors and (j, i) not in vectors:
                 # direction chosen so vector can be applied to first index
                 vec = com_i - com_j
                 norm = np.linalg.norm(vec)
@@ -492,24 +494,23 @@ def generate_string_start(reactants, product, strategy, reorder=False,
                 else:
                     vectors[(i, j)] = vec / norm
 
-    # apply vectors to fragments
-    # fragments are now in right place, and can be replaced by reactant geometries
-    for indices, vector in vectors.items():
-        frags[indices[0]].molecule.translate_sites(vector=vector*separation_dist)
-        frags[indices[0]].set_node_attributes()
-
     # map fragments to reactants, and translate reactants to fragment positions
     frag_rct_map = dict()
     for f, frag in enumerate(frags):
         for r, rct_mg in enumerate(rct_mgs):
             if frag.isomorphic_to(rct_mg) and r not in frag_rct_map.values():
                 frag_rct_map[f] = r
-                vec = frag.molecule.center_of_mass - rct_mg.molecule.center_of_mass
-                rct_mg.molecule.translate_sites(vector=vec)
                 orient_vec = coorient(frag, rct_mg)
                 rct_mg.molecule.translate_sites(vector=orient_vec)
                 rct_mg.set_node_attributes()
                 break
+
+    # apply separation vectors to reactants
+    # reactants are now in right place
+    for indices, vector in vectors.items():
+        vector *= separation_dist
+        rct_mgs[indices[0]].molecule.translate_sites(vector=vector)
+        rct_mgs[indices[0]].set_node_attributes()
 
     return {"reactants": [r.molecule for r in rct_mgs],
             "products": [pro_mg.molecule]}
