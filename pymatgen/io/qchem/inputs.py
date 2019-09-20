@@ -9,7 +9,7 @@ from monty.json import MSONable
 from monty.io import zopen
 from pymatgen.core import Molecule
 from pymatgen.analysis.graphs import MoleculeGraph
-from pymatgen.analysis.local_env import CovalentBondNN
+from pymatgen.analysis.local_env import OpenBabelNN
 from .utils import read_table_pattern, read_pattern, lower_and_check_unique, map_atoms_reaction
 
 # Classes for reading/manipulating/writing QChem ouput files.
@@ -118,9 +118,7 @@ class QCInput(MSONable):
         #   - Has a method or DFT exchange functional
         #   - Has a valid job_type or jobtype
 
-        valid_job_types = [
-            "opt", "optimization", "sp", "freq", "frequency", "force", "fsm", "nmr", "ts"
-        ]
+        valid_job_types = ["opt", "optimization", "sp", "freq", "frequency", "force", "fsm", "nmr", "ts", "gsm"]
 
         if "basis" not in self.rem:
             raise ValueError("The rem dictionary must contain a 'basis' entry")
@@ -464,7 +462,7 @@ class QCInput(MSONable):
             species=species_rct,
             coords=coords_rct,
             charge=charge_rct)
-        rct_mg = MoleculeGraph.with_local_env_strategy(rct_mol, CovalentBondNN(),
+        rct_mg = MoleculeGraph.with_local_env_strategy(rct_mol, OpenBabelNN(),
                                                        reorder=False,
                                                        extend_structure=False)
 
@@ -485,7 +483,7 @@ class QCInput(MSONable):
             species=species_pro,
             coords=coords_pro,
             charge=charge_pro)
-        pro_mg = MoleculeGraph.with_local_env_strategy(pro_mol, CovalentBondNN(),
+        pro_mg = MoleculeGraph.with_local_env_strategy(pro_mol, OpenBabelNN(),
                                                        reorder=False,
                                                        extend_structure=False)
         mol["products"] = [p.molecule for p in pro_mg.get_disconnected_fragments()]

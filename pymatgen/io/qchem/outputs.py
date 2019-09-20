@@ -49,9 +49,9 @@ class QCOutput(MSONable):
             filename (str): Filename to parse
         """
         self.filename = filename
-        self.data = {}
-        self.data["errors"] = []
-        self.data["warnings"] = {}
+        self.data = dict()
+        self.data["errors"] = list()
+        self.data["warnings"] = dict()
         self.text = ""
         with zopen(filename, 'rt') as f:
             self.text = f.read()
@@ -319,6 +319,15 @@ class QCOutput(MSONable):
         if self.data.get("freezing_string_job", []):
             self._read_string_geometries()
             self._read_freezing_string_data()
+
+        self.data["growing_string_job"] = read_pattern(
+            self.text, {
+                "key": r"(?i)\s*job(?:_)*type\s*(?:=)*\s*gsm"
+            },
+            terminate_on_match=True).get("key")
+        if self.data.get("growing_string_job", []):
+            self._read_string_geometries()
+            self._read_growing_string_data()
 
         self.data["force_job"] = read_pattern(
             self.text, {
@@ -1126,17 +1135,23 @@ class QCOutput(MSONable):
 
         dirname = os.path.dirname(self.filename)
 
-        vfile_parser = QCVFileParser(filename=os.path.join(dirname, "Vfile.txt"))
+        vfile_parser = QCVFileParser(filename=os.path.join(dirname, "Vfile.txt"), method="fsm")
         stringfile_parser = QCStringfileParser(filename=os.path.join(dirname, "stringfile.txt"))
         perpgradfile_parser = QCPerpGradFileParser(filename=os.path.join(dirname,
-                                                                         "perp_grad_file.txt"))
+                                                                         "perp_grad_file.txt"),
+                                                   method="fsm")
 
         self.data["string_num_images"] = vfile_parser.data["num_images"]
         self.data["string_energies"] = vfile_parser.data["image_energies"]
         self.data["string_relative_energies"] = vfile_parser.data["relative_energies"]
 
         self.data["string_geometries"] = stringfile_parser.data["geometries"]
-        self.data["string_molecules"] = stringfile_parser.data["molecules"]
+        self.data["string_molecules"] = list()
+        string_mols = stringfile_parser.data["molecules"]
+        for mol in string_mols:
+            mol.set_charge_and_spin(charge=self.data.get("charge"),
+                                    spin_multiplicity=self.data.get("multiplicity"))
+            self.data["string_molecules"].append(mol)
 
         self.data["string_absolute_distances"] = perpgradfile_parser.data["absolute_distances"]
         self.data["string_proportional_distances"] = perpgradfile_parser.data["proportional_distances"]
@@ -1146,6 +1161,60 @@ class QCOutput(MSONable):
         max_index = vfile_parser.data["image_energies"].index(string_max_energy)
         molecule_max_energy = stringfile_parser.data["molecules"][max_index]
         self.data["string_max_energy"] = string_max_energy
+        self.data["string_ts_guess"] = molecule_max_energy
+
+    def _read_growing_string_data(self):
+        """
+        Parses information from growing string method (GSM) calculation to predict the transition
+        state of the reaction.
+        """
+
+        dirname = os.path.dirname(self.filename)
+
+        vfile_parser = QCVFileParser(filename=os.path.join(dirname, "Vfile.txt"), method="gsm")
+        perpgradfile_parser = QCPerpGradFileParser(filename=os.path.join(dirname,
+                                                                         "perp_grad_file.txt"), method="gsm")
+
+        self.data["string_num_images"] = vfile_parser.data["num_images"]
+        self.data["string_relative_energies"] = vfile_parser.data["relative_energies"]
+        self.data["string_relative_energies_iterations"] = vfile_parser.data["relative_energies_iterations"]
+
+        self.data["string_gradient_magnitudes"] = perpgradfile_parser.data["gradient_magnitudes"]
+        self.data["string_gradient_magnitudes_iterations"] = perpgradfile_parser.data["gradient_magnitudes_iterations"]
+        self.data["string_total_gradient_magnitude"] = perpgradfile_parser.data["total_gradient_magnitude"]
+        self.data["string_total_gradient_magnitude_iterations"] = perpgradfile_parser.data["total_gradient_magnitude_iterations"]
+
+        header_pattern = r"\s*structure [0-9]+\s*"
+        row_pattern = r"\s*(?P<species>[A-Za-z]+)\s+(?P<x_coord>\-?[0-9]+\.[0-9]+)\s+(?P<y_coord>\-?[0-9]+\.[0-9]+)\s+(?P<z_coord>\-?[0-9]+\.[0-9]+)"
+        footer_pattern = r""
+
+        temp_data = read_table_pattern(self.text,
+                                       header_pattern=header_pattern,
+                                       row_pattern=row_pattern,
+                                       footer_pattern=footer_pattern)
+
+        molecules = list()
+        geometries = list()
+        for image in temp_data:
+            species = list()
+            coords = list()
+            for row in image:
+                species.append(row["species"])
+                coords.append([row["x_coord"],
+                               row["y_coord"],
+                               row["z_coord"]])
+            coords = process_parsed_coords(coords)
+            molecules.append(Molecule(species, coords,
+                                      charge=self.data.get("charge"),
+                                      spin_multiplicity=self.data.get("multiplicity")))
+            geometries.append(coords)
+        self.data["string_molecules"] = molecules
+        self.data["string_geometries"] = geometries
+
+        string_max_energy = max(vfile_parser.data["relative_energies"])
+        max_index = vfile_parser.data["relative_energies"].index(string_max_energy)
+        molecule_max_energy = self.data["string_molecules"][max_index]
+        self.data["string_max_relative_energy"] = string_max_energy
         self.data["string_ts_guess"] = molecule_max_energy
 
     def _read_force_data(self):
@@ -1292,7 +1361,7 @@ class QCOutput(MSONable):
             self.data["errors"] += ["unknown_error"]
 
     def as_dict(self):
-        d = {}
+        d = dict()
         d["data"] = self.data
         d["text"] = self.text
         d["filename"] = self.filename
@@ -1301,7 +1370,7 @@ class QCOutput(MSONable):
 
 class QCVFileParser:
 
-    def __init__(self, filename="Vfile.txt"):
+    def __init__(self, filename="Vfile.txt", method="fsm"):
         self.filename = filename
         self.data = dict()
         self.text = str()
@@ -1309,6 +1378,14 @@ class QCVFileParser:
         with zopen(filename, 'rt') as f:
             self.text = f.read()
 
+        if method == "fsm":
+            self._parse_fsm()
+        elif method == "gsm":
+            self._parse_gsm()
+        else:
+            raise ValueError("QCVFileParser is only designed for FSM and GSM jobs!")
+
+    def _parse_fsm(self):
         header_pattern = r"#\s+Energy\s+profile\s*"
         row_pattern = r"\s*\d+\s+(?P<distance_abs>[0-9\.]+)\s+(?P<distance_prop>[01]\.[0-9]+)\s+(?P<energy_abs>[\-\.0-9]+)\s+(?P<energy_rel>[\-\.0-9]+)\s*"
         footer_pattern = r""
@@ -1327,10 +1404,37 @@ class QCVFileParser:
             self.data["absolute_distances"].append(float(row["distance_abs"]))
             self.data["proportional_distances"].append(float(row["distance_prop"]))
             self.data["image_energies"].append(float(row["energy_abs"]))
+            # Relative energy in eV
             self.data["relative_energies"].append(float(row["energy_rel"]))
 
+    def _parse_gsm(self):
+        header_pattern = r"\s*Energy profile vs Iteration \(eV\)\s*Iteration\s+node 1\s+node 2\s+\.\.\."
+        row_pattern = r"(?:[0-9]+)\s+(?P<node_rel_energies>(?:(?:\-?[0-9]+\.[0-9]+\s*)|(?:\s*--\s*))+)"
+        footer_pattern = r""
+
+        temp_data = read_table_pattern(self.text,
+                                       header_pattern=header_pattern,
+                                       row_pattern=row_pattern,
+                                       footer_pattern=footer_pattern)
+
+        self.data["num_iterations"] = len(temp_data[0])
+        self.data["relative_energies_iterations"] = list()
+        for row in temp_data[0]:
+            words = row["node_rel_energies"].split(" ")
+            rel_energies = list()
+            for word in words:
+                if word in ["", "\n"]:
+                    continue
+                elif word == "--":
+                    rel_energies.append(None)
+                else:
+                    rel_energies.append(float(word))
+            self.data["relative_energies_iterations"].append(rel_energies)
+        self.data["relative_energies"] = self.data["relative_energies_iterations"][-1]
+        self.data["num_images"] = len(self.data["relative_energies"])
+
     def as_dict(self):
-        d = {}
+        d = dict()
         d["data"] = self.data
         d["text"] = self.text
         d["filename"] = self.filename
@@ -1385,7 +1489,7 @@ class QCStringfileParser:
                                                    coords=geometry))
 
     def as_dict(self):
-        d = {}
+        d = dict()
         d["data"] = self.data
         d["text"] = self.text
         d["filename"] = self.filename
@@ -1394,7 +1498,7 @@ class QCStringfileParser:
 
 class QCPerpGradFileParser:
 
-    def __init__(self, filename="perp_grad_file.txt"):
+    def __init__(self, filename="perp_grad_file.txt", method="fsm"):
         self.filename = filename
         self.data = dict()
         self.text = str()
@@ -1402,8 +1506,16 @@ class QCPerpGradFileParser:
         with zopen(filename, 'rt') as f:
             self.text = f.read()
 
+        if method == "fsm":
+            self._parse_fsm()
+        elif method == "gsm":
+            self._parse_gsm()
+        else:
+            raise ValueError("QCPerpGradFileParser is only designed for FSM and GSM jobs!")
+
+    def _parse_fsm(self):
         header_pattern = r"\s*#\s*perp_grad\s+magnitudes\s*"
-        row_pattern = r"\s*\d+\s+(?P<distance_abs>[0-9\.]+)\s+(?P<distance_prop>[01]\.[0-9]+)\s+(?P<grad_mag>[\.\-na0-9]+)\s*"
+        row_pattern = r"\s*\d+\s+(?P<distance_abs>[0-9\.]+)\s+(?P<distance_prop>[01]\.[0-9]+)\s+(?P<grad_mag>[\.\-naif0-9]+)\s*"
         footer_pattern = r""
 
         temp_data = read_table_pattern(self.text,
@@ -1416,7 +1528,7 @@ class QCPerpGradFileParser:
         self.data["proportional_distances"] = list()
         self.data["gradient_magnitudes"] = list()
         for row in temp_data[0]:
-            if "nan" in row["grad_mag"]:
+            if "nan" in row["grad_mag"] or "inf" in row["grad_mag"]:
                 grad_mag = math.inf
             else:
                 grad_mag = float(row["grad_mag"])
@@ -1424,8 +1536,38 @@ class QCPerpGradFileParser:
             self.data["proportional_distances"].append(float(row["distance_prop"]))
             self.data["gradient_magnitudes"].append(grad_mag)
 
+    def _parse_gsm(self):
+        header_pattern = r"\s*Perpendicular gradient vs Iteration\s*Iteration\s+node 1\s+node 2\s+\.\.\.\s+total"
+        row_pattern = r"\n(?P<node_gradients>(?:(?:\-?[0-9]+\.[0-9]+[^\S\r\n]*)|(?:\s*--[^\S\r\n]*))+)"
+        footer_pattern = r""
+
+        temp_data = read_table_pattern(self.text,
+                                       header_pattern=header_pattern,
+                                       row_pattern=row_pattern,
+                                       footer_pattern=footer_pattern)
+
+        self.data["num_iterations"] = len(temp_data[0])
+        self.data["gradient_magnitudes_iterations"] = list()
+        self.data["total_gradient_magnitude_iterations"] = list()
+        for row in temp_data[0]:
+            words = row["node_gradients"].split(" ")
+            gradients = list()
+            for word in words:
+                if word in ["", "\n"]:
+                    continue
+                elif word == "--":
+                    gradients.append(None)
+                else:
+                    gradients.append(float(word))
+            self.data["total_gradient_magnitude_iterations"].append(gradients.pop(-1))
+            self.data["gradient_magnitudes_iterations"].append(gradients)
+
+        self.data["gradient_magnitudes"] = self.data["gradient_magnitudes_iterations"][-1]
+        self.data["total_gradient_magnitude"] = self.data["total_gradient_magnitude_iterations"][-1]
+        self.data["num_images"] = len(self.data["gradient_magnitudes"])
+
     def as_dict(self):
-        d = {}
+        d = dict()
         d["data"] = self.data
         d["text"] = self.text
         d["filename"] = self.filename

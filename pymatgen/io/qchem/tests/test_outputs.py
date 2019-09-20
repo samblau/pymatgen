@@ -93,12 +93,17 @@ property_list = {"errors",
                  "string_num_images",
                  "string_energies",
                  "string_relative_energies",
+                 "string_relative_energies_iterations",
                  "string_geometries",
                  "string_molecules",
                  "string_absolute_distances",
                  "string_proportional_distances",
                  "string_gradient_magnitudes",
+                 "string_gradient_magnitudes_iterations",
+                 "string_total_gradient_magnitude",
+                 "string_total_gradient_magnitude_iterations",
                  "string_max_energy",
+                 "string_max_relative_energy",
                  "string_ts_guess",
                  "string_initial_reactant_molecules",
                  "string_initial_product_molecules",
@@ -161,7 +166,9 @@ single_job_out_names = {"unable_to_determine_lambda_in_geom_opt.qcout",
                         "new_qchem_files/1570.qout",
                         "new_qchem_files/1570_2.qout",
                         "new_qchem_files/single_point.qout",
-                        "new_qchem_files/fsm.qout"}
+                        "new_qchem_files/fsm/da/fsm.qout",
+                        "new_qchem_files/fsm/li_ion/mol.qout",
+                        "new_qchem_files/gsm/gsm.qout"}
 
 multi_job_out_names = {"not_enough_total_memory.qcout",
                        "new_qchem_files/VC_solv_eps10.qcout",
@@ -176,6 +183,11 @@ multi_job_out_names = {"not_enough_total_memory.qcout",
 
 
 class TestQCOutput(PymatgenTest):
+
+    def setUp(self) -> None:
+        # self.generate_single_job_dict()
+        # self.generate_multi_job_dict()
+        pass
 
     @staticmethod
     def generate_single_job_dict():
@@ -233,8 +245,23 @@ class TestQCOutput(PymatgenTest):
 
 class QCVfileParserTest(PymatgenTest):
 
-    def test_init(self):
-        filename = os.path.join(test_dir, "new_qchem_files", "Vfile.txt")
+    def setUp(self) -> None:
+        # self.generate_vfile_dict()
+        pass
+
+    @staticmethod
+    def generate_vfile_dict():
+        """
+        Used for testing GSM data.
+        """
+        dumpfn(QCVFileParser(filename=os.path.join(test_dir, "new_qchem_files", "gsm",
+                                           "Vfile.txt"),
+                     method="gsm").as_dict(),
+               os.path.join(test_dir, "new_qchem_files", "gsm", "vfile.json"))
+
+    def test_fsm(self):
+        filename = os.path.join(test_dir, "new_qchem_files", "fsm", "da",
+                                "Vfile.txt")
 
         with open(filename) as vfile:
             text = vfile.read()
@@ -283,11 +310,20 @@ class QCVfileParserTest(PymatgenTest):
         self.assertSequenceEqual(parsed.data["relative_energies"],
                                  relative_energies)
 
+    def test_gsm(self):
+        filename = os.path.join(test_dir, "new_qchem_files", "gsm", "Vfile.txt")
+        parsed = QCVFileParser(filename=filename, method="gsm")
+
+        basis = loadfn(os.path.join(test_dir, "new_qchem_files", "gsm", "vfile.json"))
+
+        self.assertDictEqual(parsed.as_dict(), basis)
+
 
 class QCStringfileParserTest(PymatgenTest):
 
-    def test_init(self):
-        filename = os.path.join(test_dir, "new_qchem_files", "stringfile.txt")
+    def test_fsm(self):
+        filename = os.path.join(test_dir, "new_qchem_files", "fsm", "da",
+                                "stringfile.txt")
 
         # To generate JSON - uncomment if/when changes need to be made
         # data = QCStringfileParser(filename).data
@@ -318,8 +354,21 @@ class QCStringfileParserTest(PymatgenTest):
 
 class QCPerpGradFileParserTest(PymatgenTest):
 
-    def test_init(self):
-        filename = os.path.join(test_dir, "new_qchem_files",
+    def setUp(self) -> None:
+        # self.generate_perp_grad_file_dict()
+        pass
+
+    @staticmethod
+    def generate_perp_grad_file_dict():
+        """
+        Used for testing GSM data.
+        """
+        dumpfn(QCPerpGradFileParser(filename=os.path.join(test_dir, "new_qchem_files", "gsm",
+                                                          "perp_grad_file.txt"), method="gsm").as_dict(),
+               os.path.join(test_dir, "new_qchem_files", "gsm", "perp_grad_file.json"))
+
+    def test_fsm(self):
+        filename = os.path.join(test_dir, "new_qchem_files", "fsm", "da",
                                 "perp_grad_file.txt")
 
         with open(filename) as perp_grad_file:
@@ -357,6 +406,14 @@ class QCPerpGradFileParserTest(PymatgenTest):
                                  proportional_distances)
         self.assertSequenceEqual(parsed.data["gradient_magnitudes"],
                                  gradient_magnitudes)
+
+    def test_gsm(self):
+        filename = os.path.join(test_dir, "new_qchem_files", "gsm", "perp_grad_file.txt")
+        parsed = QCPerpGradFileParser(filename=filename, method="gsm")
+
+        basis = loadfn(os.path.join(test_dir, "new_qchem_files", "gsm", "perp_grad_file.json"))
+
+        self.assertDictEqual(parsed.as_dict(), basis)
 
 
 if __name__ == "__main__":
