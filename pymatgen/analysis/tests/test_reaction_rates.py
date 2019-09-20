@@ -27,9 +27,9 @@ __date__ = "September 2019"
 module_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 
 fsm_outfile = os.path.join(module_dir, "..", "..", "..", "test_files", "molecules",
-                           "new_qchem_files", "fsm.qout")
+                           "new_qchem_files", "fsm", "da", "fsm.qout")
 fsm_infile = os.path.join(module_dir, "..", "..", "..", "test_files", "molecules",
-                           "new_qchem_files", "fsm.qin")
+                           "new_qchem_files", "fsm", "da", "fsm.qin")
 
 
 class ReactionRateCalculatorTest(unittest.TestCase):
