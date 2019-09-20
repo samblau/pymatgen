@@ -342,7 +342,7 @@ class GrowingStringSet(QChemDictSet):
         self.basis_set = basis_set
         self.scf_algorithm = scf_algorithm
         self.max_scf_cycles = max_scf_cycles
-        super(FreezingStringSet, self).__init__(
+        super(GrowingStringSet, self).__init__(
             molecule=molecule,
             job_type="gsm",
             dft_rung=dft_rung,

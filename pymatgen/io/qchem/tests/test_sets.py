@@ -581,7 +581,7 @@ class FreqSetTest(PymatgenTest):
 class FreezingStringSetTest(PymatgenTest):
     def test_init(self):
         test_molecule = QCInput.from_file(
-            os.path.join(mol_dir, "new_qchem_files/fsm/fsm.qin")).molecule
+            os.path.join(mol_dir, "new_qchem_files/fsm/da/fsm.qin")).molecule
 
         test_FSMSet = FreezingStringSet(molecule=test_molecule)
         self.assertEqual(test_FSMSet.rem, {
@@ -606,7 +606,7 @@ class FreezingStringSetTest(PymatgenTest):
 
     def test_pcm_init(self):
         test_molecule = QCInput.from_file(
-            os.path.join(mol_dir, "new_qchem_files/fsm/fsm.qin")).molecule
+            os.path.join(mol_dir, "new_qchem_files/fsm/da/fsm.qin")).molecule
         test_FSMSet = FreezingStringSet(molecule=test_molecule,
                                         pcm_dielectric=10.0)
         self.assertEqual(
@@ -640,7 +640,7 @@ class FreezingStringSetTest(PymatgenTest):
 
     def test_smd_init(self):
         test_molecule = QCInput.from_file(
-            os.path.join(mol_dir, "new_qchem_files/fsm/fsm.qin")).molecule
+            os.path.join(mol_dir, "new_qchem_files/fsm/da/fsm.qin")).molecule
         test_FSMSet = FreezingStringSet(molecule=test_molecule,
                                         smd_solvent='water')
         self.assertEqual(
@@ -671,8 +671,8 @@ class GrowingStringSetTest(PymatgenTest):
         test_molecule = QCInput.from_file(
             os.path.join(mol_dir, "new_qchem_files/gsm/gsm.qin")).molecule
 
-        test_FSMSet = FreezingStringSet(molecule=test_molecule)
-        self.assertEqual(test_FSMSet.rem, {
+        test_GSMSet = GrowingStringSet(molecule=test_molecule)
+        self.assertEqual(test_GSMSet.rem, {
                 'job_type': 'gsm',
                 'gen_scfman': 'true',
                 'basis': 'def2-tzvppd',
@@ -688,17 +688,17 @@ class GrowingStringSetTest(PymatgenTest):
                 'sym_ignore': 'true',
                 'symmetry': 'false'
             })
-        self.assertEqual(test_FSMSet.pcm, {})
-        self.assertEqual(test_FSMSet.solvent, {})
-        self.assertEqual(test_FSMSet.molecule, test_molecule)
+        self.assertEqual(test_GSMSet.pcm, {})
+        self.assertEqual(test_GSMSet.solvent, {})
+        self.assertEqual(test_GSMSet.molecule, test_molecule)
 
     def test_pcm_init(self):
         test_molecule = QCInput.from_file(
             os.path.join(mol_dir, "new_qchem_files/gsm/gsm.qin")).molecule
-        test_FSMSet = FreezingStringSet(molecule=test_molecule,
-                                        pcm_dielectric=10.0)
+        test_GSMSet = GrowingStringSet(molecule=test_molecule,
+                                       pcm_dielectric=10.0)
         self.assertEqual(
-            test_FSMSet.rem, {
+            test_GSMSet.rem, {
                 'job_type': 'gsm',
                 'gen_scfman': 'true',
                 'basis': 'def2-tzvppd',
@@ -716,24 +716,24 @@ class GrowingStringSetTest(PymatgenTest):
                 'symmetry': 'false'
             })
         self.assertEqual(
-            test_FSMSet.pcm, {
+            test_GSMSet.pcm, {
                 'heavypoints': '194',
                 'hpoints': '194',
                 'radii': 'uff',
                 'theory': 'cpcm',
                 'vdwscale': '1.1'
             })
-        self.assertEqual(test_FSMSet.solvent, {'dielectric': 10.0})
-        self.assertEqual(test_FSMSet.molecule, test_molecule)
+        self.assertEqual(test_GSMSet.solvent, {'dielectric': 10.0})
+        self.assertEqual(test_GSMSet.molecule, test_molecule)
 
     def test_smd_init(self):
         test_molecule = QCInput.from_file(
             os.path.join(mol_dir, "new_qchem_files/gsm/gsm.qin")).molecule
-        test_FSMSet = FreezingStringSet(molecule=test_molecule,
-                                        smd_solvent='water')
+        test_GSMSet = GrowingStringSet(molecule=test_molecule,
+                                       smd_solvent='water')
         self.assertEqual(
-            test_FSMSet.rem, {
-                'job_type': 'fsm',
+            test_GSMSet.rem, {
+                'job_type': 'gsm',
                 'gen_scfman': 'true',
                 'basis': 'def2-tzvppd',
                 'max_scf_cycles': 200,
@@ -750,8 +750,8 @@ class GrowingStringSetTest(PymatgenTest):
                 'sym_ignore': 'true',
                 'symmetry': 'false'
             })
-        self.assertEqual(test_FSMSet.smx, {'solvent': 'water'})
-        self.assertEqual(test_FSMSet.molecule, test_molecule)
+        self.assertEqual(test_GSMSet.smx, {'solvent': 'water'})
+        self.assertEqual(test_GSMSet.molecule, test_molecule)
 
 
 if __name__ == '__main__':

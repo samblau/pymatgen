@@ -255,7 +255,7 @@ class QCVfileParserTest(PymatgenTest):
         Used for testing GSM data.
         """
         dumpfn(QCVFileParser(filename=os.path.join(test_dir, "new_qchem_files", "gsm",
-                                           "Vfile.txt"),
+                                                   "Vfile.txt"),
                      method="gsm").as_dict(),
                os.path.join(test_dir, "new_qchem_files", "gsm", "vfile.json"))
 
