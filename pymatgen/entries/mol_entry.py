@@ -69,8 +69,14 @@ class MoleculeEntry(MSONable):
                                                           reorder=False,
                                                           extend_structure=False)
         self.mol_graph = metal_edge_extender(mol_graph)
-        self.graph = self.mol_graph.graph
-        self.edges = self.graph.edges()
+
+    @property
+    def graph(self):
+        return self.mol_graph.graph
+
+    @property
+    def edges(self):
+        return self.graph.edges()
 
     @property
     def energy(self):
@@ -122,4 +128,3 @@ class MoleculeEntry(MSONable):
 
     def __str__(self):
         return self.__repr__()
-    
