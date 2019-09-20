@@ -10,7 +10,8 @@ import unittest
 from pymatgen.core.structure import Molecule
 from pymatgen.analysis.graphs import MoleculeGraph
 from pymatgen.analysis.local_env import CovalentBondNN
-from pymatgen.io.qchem.utils import map_atoms_reaction
+from pymatgen.io.qchem.utils import (map_atoms_reaction,
+                                     generate_string_start)
 # from pymatgen.util.testing import PymatgenTest
 
 try:
@@ -52,6 +53,15 @@ class QCUtilsTest(unittest.TestCase):
         self.assertDictEqual(mapping, {6: 0, 2: 1, 4: 2, 7: 3, 10: 4, 14: 5, 15: 6, 16: 7, 18: 8,
                                        3: 9, 8: 10, 0: 11, 9: 12, 5: 13, 1: 14, 11: 15, 17: 16,
                                        12: 17, 13: 18})
+
+    def test_coorient(self):
+        pass
+
+    def test_generate_string_start(self):
+        strat = CovalentBondNN()
+        print(generate_string_start([self.rct_1, self.rct_2], self.pro, strat,
+                                    reorder=False, extend_structure=False,
+                                    map_atoms=True).edges())
 
 
 if __name__ == "__main__":
