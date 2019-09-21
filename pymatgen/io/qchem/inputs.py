@@ -249,17 +249,17 @@ class QCInput(MSONable):
         return '\n'.join(mol_list)
 
     @staticmethod
-    def multi_molecule_template(molecule):
+    def multi_molecule_template(molecule, try_generate=True):
         mol_list = list()
         mol_list.append("$molecule")
 
-        if len(molecule["reactants"]) == 1:
+        if len(molecule["reactants"]) == 1 and try_generate:
             start = generate_string_start(molecule["products"],
                                           molecule["reactants"][0],
                                           OpenBabelNN())
             reactants = start["products"]
             products = start["reactants"]
-        elif len(molecule["products"]) == 1:
+        elif len(molecule["products"]) == 1 and try_generate:
             start = generate_string_start(molecule["reactants"],
                                           molecule["products"][0],
                                           OpenBabelNN())
