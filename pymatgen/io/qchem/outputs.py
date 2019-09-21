@@ -1437,7 +1437,7 @@ class QCVFileParser:
         d = dict()
         d["data"] = self.data
         d["text"] = self.text
-        d["filename"] = self.filename
+        d["filename"] = os.path.split(self.filename)[-1]
         return jsanitize(d, strict=True)
 
 
@@ -1492,7 +1492,7 @@ class QCStringfileParser:
         d = dict()
         d["data"] = self.data
         d["text"] = self.text
-        d["filename"] = self.filename
+        d["filename"] = os.path.split(self.filename)[-1]
         return jsanitize(d, strict=True)
 
 
@@ -1570,7 +1570,7 @@ class QCPerpGradFileParser:
         d = dict()
         d["data"] = self.data
         d["text"] = self.text
-        d["filename"] = self.filename
+        d["filename"] = os.path.split(self.filename)[-1]
         return jsanitize(d, strict=True)
 
 
