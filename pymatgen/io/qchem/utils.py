@@ -372,7 +372,7 @@ def map_atoms_reaction(reactants, product):
     return mapping
 
 
-def coorient(mol_1, mol_2):
+def orient_molecule(mol_1, mol_2):
     """
     Determine the translation vector that minimizes the distances between
     corresponding atoms in two (isomorphic) molecules.
@@ -384,7 +384,19 @@ def coorient(mol_1, mol_2):
     """
 
     def atom_dist(n, vec):
-        return np.linalg.norm(mol_1.molecule.cart_coords[n] - mol_2.molecule.cart_coords[n] + vec)
+        copy_2 = copy.deepcopy(mol_2)
+        # Get distance between atom n in mol_1 and mol_2 after transformation
+        trans = vec[:3]
+        rot = vec[3:]
+
+        for index, vec in enumerate([[1, 0, 0], [0, 1, 0], [0, 0, 1]]):
+            copy_2.molecule.rotate_sites(theta=rot[index],
+                                         axis=vec,
+                                         anchor=copy_2.molecule.center_of_mass)
+
+        coord_n = copy_2.molecule.cart_coords[n] + trans
+
+        return np.linalg.norm(mol_1.molecule.cart_coords[n] - coord_n)
 
     def all_dists(vec):
         return np.array([atom_dist(n, vec) for n in range(len(mol_1))])
@@ -393,7 +405,7 @@ def coorient(mol_1, mol_2):
         raise ValueError("Function coorient should only be used on isomorphic "
                          "MoleculeGraphs!")
 
-    return -1 * leastsq(all_dists, np.zeros(3))[0]
+    return leastsq(all_dists, np.zeros(6))[0]
 
 
 def generate_string_start(reactants, product, strategy, reorder=False,
@@ -440,6 +452,7 @@ def generate_string_start(reactants, product, strategy, reorder=False,
                                                              reorder=reorder,
                                                              extend_structure=extend_structure))
         distance += 5
+    # print(rct_mgs)
 
     # generate composite Molecule and MoleculeGraph including all reactants
     all_rct = Molecule(species, coords, charge=charge, spin_multiplicity=spin)
@@ -470,12 +483,16 @@ def generate_string_start(reactants, product, strategy, reorder=False,
                                                        reorder=reorder,
                                                        extend_structure=extend_structure)
 
+    # print(all_rct_mg)
+    # print(pro_mg)
     # break bonds to get reactants from product
     diff_graph = nx.difference(pro_mg.graph, all_rct_mg.graph)
+    # print(diff_graph.edges())
     for bond in diff_graph.edges():
         pro_mg.break_edge(bond[0], bond[1], allow_reverse=True)
 
     frags = pro_mg.get_disconnected_fragments()
+    # print(frags)
 
     coms = dict()
     for e, frag in enumerate(frags):
@@ -500,10 +517,17 @@ def generate_string_start(reactants, product, strategy, reorder=False,
         for r, rct_mg in enumerate(rct_mgs):
             if frag.isomorphic_to(rct_mg) and r not in frag_rct_map.values():
                 frag_rct_map[f] = r
-                orient_vec = coorient(frag, rct_mg)
-                rct_mg.molecule.translate_sites(vector=orient_vec)
+                orient_vec = orient_molecule(frag, rct_mg)
+                trans = orient_vec[0:3]
+                rot = orient_vec[3:]
+                for index, vec in enumerate([[1, 0, 0], [0, 1, 0], [0, 0, 1]]):
+                    rct_mg.molecule.rotate_sites(theta=rot[index],
+                                                 axis=vec,
+                                                 anchor=rct_mg.molecule.center_of_mass)
+                rct_mg.molecule.translate_sites(vector=trans)
                 rct_mg.set_node_attributes()
                 break
+    # print(frag_rct_map)
 
     # apply separation vectors to reactants
     # reactants are now in right place

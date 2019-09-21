@@ -13,7 +13,7 @@ from pymatgen.core.structure import Molecule
 from pymatgen.analysis.graphs import MoleculeGraph
 from pymatgen.analysis.local_env import CovalentBondNN
 from pymatgen.io.qchem.utils import (map_atoms_reaction,
-                                     coorient,
+                                     orient_molecule,
                                      generate_string_start)
 # from pymatgen.util.testing import PymatgenTest
 
@@ -57,7 +57,7 @@ class QCUtilsTest(unittest.TestCase):
                                        3: 9, 8: 10, 0: 11, 9: 12, 5: 13, 1: 14, 11: 15, 17: 16,
                                        12: 17, 13: 18})
 
-    def test_coorient(self):
+    def test_orient_molecule(self):
         mol_1 = Molecule.from_file(os.path.join(test_dir, "orientation_1.mol"))
         mol_2 = Molecule.from_file(os.path.join(test_dir, "orientation_2.mol"))
 
@@ -68,9 +68,10 @@ class QCUtilsTest(unittest.TestCase):
                                                      reorder=False,
                                                      extend_structure=False)
 
-        vec = coorient(mg_1, mg_2)
-        right_vec = [-0.99106646, -0.26431354, 0.05368004]
-        for i in range(3):
+        vec = orient_molecule(mg_1, mg_2)
+        right_vec = [-0.99041777, -0.26688475, 0.05017607,
+                     -0.0085718, -0.06095936, 0.04393405]
+        for i in range(6):
             self.assertAlmostEqual(vec[i], right_vec[i], 7)
 
     def test_generate_string_start(self):
@@ -85,7 +86,7 @@ class QCUtilsTest(unittest.TestCase):
         distance = np.linalg.norm(molecules["reactants"][0].center_of_mass -
                                   molecules["reactants"][1].center_of_mass)
 
-        self.assertAlmostEqual(distance, 3.4593523968327)
+        self.assertAlmostEqual(distance, 3.516695391504106)
 
         molecules_large_gap = generate_string_start([self.rct_1, self.rct_2], self.pro, strat,
                               reorder=False, extend_structure=False,
@@ -94,7 +95,7 @@ class QCUtilsTest(unittest.TestCase):
         distance_large = np.linalg.norm(molecules_large_gap["reactants"][0].center_of_mass -
                                   molecules_large_gap["reactants"][1].center_of_mass)
 
-        self.assertAlmostEqual(distance_large, 5.453798792042971)
+        self.assertAlmostEqual(distance_large, 5.516496046861798)
 
 
 if __name__ == "__main__":
