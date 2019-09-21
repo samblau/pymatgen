@@ -1,11 +1,17 @@
 import re
 import numpy as np
+from scipy.optimize import leastsq
 from collections import defaultdict
 import itertools
 from difflib import SequenceMatcher
 from statistics import mean
+import copy
 
+import networkx as nx
 import networkx.algorithms.isomorphism as iso
+
+from pymatgen.core.structure import Molecule
+from pymatgen.analysis.graphs import MoleculeGraph
 
 
 def read_pattern(text_str, patterns, terminate_on_match=False,
@@ -364,3 +370,171 @@ def map_atoms_reaction(reactants, product):
             break
 
     return mapping
+
+
+def orient_molecule(mol_1, mol_2):
+    """
+    Determine the translation vector that minimizes the distances between
+    corresponding atoms in two (isomorphic) molecules.
+
+    :param mol_1: MoleculeGraph of the molecule that is not to be translated
+    :param mol_2: MoleculeGraph of the molecule that is to be translated
+
+    :return: np.ndarray representing a translation vector for mol_2
+    """
+
+    def atom_dist(n, vec):
+        copy_2 = copy.deepcopy(mol_2)
+        # Get distance between atom n in mol_1 and mol_2 after transformation
+        trans = vec[:3]
+        rot = vec[3:]
+
+        for index, vec in enumerate([[1, 0, 0], [0, 1, 0], [0, 0, 1]]):
+            copy_2.molecule.rotate_sites(theta=rot[index],
+                                         axis=vec,
+                                         anchor=copy_2.molecule.center_of_mass)
+
+        coord_n = copy_2.molecule.cart_coords[n] + trans
+
+        return np.linalg.norm(mol_1.molecule.cart_coords[n] - coord_n)
+
+    def all_dists(vec):
+        return np.array([atom_dist(n, vec) for n in range(len(mol_1))])
+
+    if not mol_1.isomorphic_to(mol_2):
+        raise ValueError("Function coorient should only be used on isomorphic "
+                         "MoleculeGraphs!")
+
+    return leastsq(all_dists, np.zeros(6))[0]
+
+
+def generate_string_start(reactants, product, strategy, reorder=False,
+                          extend_structure=False, map_atoms=True,
+                          separation_dist=0.5):
+    """
+    For a reaction of type A + B <-> C, manipulate C in such a way as to provide
+    a reasonable starting guess for string calculations (FSM/GSM).
+
+    :param reactants: list of Molecule objects representing the reaction
+        reactants
+    :param product: Molecule object representing the reaction product
+    :param strategy: local_env NearNeighbors object used to generate
+        MoleculeGraphs
+    :param reorder: parameter for local_env strategies
+    :param extend_structure: parameter for local_env strategies
+    :param map_atoms: if True (default), use map_atoms_reaction to ensure that
+        the nodes in the reactant and product graphs are the same. If False,
+        the user must ensure that the product molecule has its atoms in the
+        same order as the reactants in order for this function to work properly.
+    :param separation_dist: distance (in Angsrom) to move each reacting species.
+        A value of 0 means that the reactant fragments will be in exactly the
+        same position that they are in the product molecule.
+
+    NOTE: This currently only works with one product.
+
+    :return: dict(group: [Molecule]), where group is either "reactants" or
+        "products"
+    """
+
+    rct_mgs = list()
+    species = list()
+    coords = list()
+    charge = product.charge
+    spin = product.spin_multiplicity
+    distance = 0
+    rcts = copy.deepcopy(reactants)
+    for rct in rcts:
+        rct.translate_sites(vector=np.array([distance, distance, distance]))
+        for site in rct:
+            species.append(site.specie)
+            coords.append(site.coords)
+        rct_mgs.append(MoleculeGraph.with_local_env_strategy(rct, strategy,
+                                                             reorder=reorder,
+                                                             extend_structure=extend_structure))
+        distance += 5
+    # print(rct_mgs)
+
+    # generate composite Molecule and MoleculeGraph including all reactants
+    all_rct = Molecule(species, coords, charge=charge, spin_multiplicity=spin)
+    all_rct_mg = MoleculeGraph.with_local_env_strategy(all_rct, strategy,
+                                                       reorder=reorder,
+                                                       extend_structure=extend_structure)
+
+    pro_mg = MoleculeGraph.with_local_env_strategy(product, strategy,
+                                                   reorder=reorder,
+                                                   extend_structure=extend_structure)
+
+    # perform atom mapping, and reorder product accordingly
+    if map_atoms:
+        mapping = map_atoms_reaction(rct_mgs, pro_mg)
+
+        if mapping is None:
+            raise ValueError("Reactant atoms cannot be mapped to product molecules using existing methods. "
+                             "Please map atoms by hand and set map_atoms=False to try again.")
+
+        species = [None for _ in range(len(product))]
+        coords = [None for _ in range(len(product))]
+        for e, site in enumerate(product):
+            species[mapping[e]] = site.species
+            coords[mapping[e]] = site.coords
+        new_pro = Molecule(species, coords, charge=charge,
+                           spin_multiplicity=spin)
+        pro_mg = MoleculeGraph.with_local_env_strategy(new_pro, strategy,
+                                                       reorder=reorder,
+                                                       extend_structure=extend_structure)
+
+    # print(all_rct_mg)
+    # print(pro_mg)
+    # break bonds to get reactants from product
+    diff_graph = nx.difference(pro_mg.graph, all_rct_mg.graph)
+    # print(diff_graph.edges())
+    for bond in diff_graph.edges():
+        pro_mg.break_edge(bond[0], bond[1], allow_reverse=True)
+
+    frags = pro_mg.get_disconnected_fragments()
+    # print(frags)
+
+    coms = dict()
+    for e, frag in enumerate(frags):
+        coms[e] = np.array(frag.molecule.center_of_mass)
+
+    # determine vectors along which to move fragments
+    vectors = dict()
+    for i, com_i in coms.items():
+        for j, com_j in coms.items():
+            if i < j and (i, j) not in vectors and (j, i) not in vectors:
+                # direction chosen so vector can be applied to first index
+                vec = com_i - com_j
+                norm = np.linalg.norm(vec)
+                if norm == 0:
+                    vectors[(i, j)] = vec
+                else:
+                    vectors[(i, j)] = vec / norm
+
+    # map fragments to reactants, and translate reactants to fragment positions
+    frag_rct_map = dict()
+    for f, frag in enumerate(frags):
+        for r, rct_mg in enumerate(rct_mgs):
+            if frag.isomorphic_to(rct_mg) and r not in frag_rct_map.values():
+                frag_rct_map[f] = r
+                orient_vec = orient_molecule(frag, rct_mg)
+                trans = orient_vec[0:3]
+                rot = orient_vec[3:]
+                for index, vec in enumerate([[1, 0, 0], [0, 1, 0], [0, 0, 1]]):
+                    rct_mg.molecule.rotate_sites(theta=rot[index],
+                                                 axis=vec,
+                                                 anchor=rct_mg.molecule.center_of_mass)
+                rct_mg.molecule.translate_sites(vector=trans)
+                rct_mg.set_node_attributes()
+                break
+    # print(frag_rct_map)
+
+    # apply separation vectors to reactants
+    # reactants are now in right place
+    for indices, vector in vectors.items():
+        vector *= separation_dist
+        rct_mgs[indices[0]].molecule.translate_sites(vector=vector)
+        rct_mgs[indices[0]].set_node_attributes()
+
+    return {"reactants": [r.molecule for r in rct_mgs],
+            "products": [pro_mg.molecule]}

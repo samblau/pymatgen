@@ -10,9 +10,12 @@ from monty.io import zopen
 from pymatgen.core import Molecule
 from pymatgen.analysis.graphs import MoleculeGraph
 from pymatgen.analysis.local_env import OpenBabelNN
-from .utils import read_table_pattern, read_pattern, lower_and_check_unique, map_atoms_reaction
+from .utils import (read_table_pattern,
+                    read_pattern,
+                    lower_and_check_unique,
+                    generate_string_start)
 
-# Classes for reading/manipulating/writing QChem ouput files.
+# Classes for reading/manipulating/writing QChem input files.
 
 __author__ = "Brandon Wood, Samuel Blau, Shyam Dwaraknath, Julian Self, " \
              "Evan Spotte-Smith"
@@ -250,30 +253,43 @@ class QCInput(MSONable):
         mol_list = list()
         mol_list.append("$molecule")
 
-        # Make sure molecules are sufficiently separated
-        reactants = list()
-        products = list()
-        for rct in molecule["reactants"]:
-            reactants.append(rct.get_centered_molecule())
-        for pro in molecule["products"]:
-            products.append(pro.get_centered_molecule())
+        if len(molecule["reactants"]) == 1:
+            start = generate_string_start(molecule["products"],
+                                          molecule["reactants"][0],
+                                          OpenBabelNN())
+            reactants = start["products"]
+            products = start["reactants"]
+        elif len(molecule["products"]) == 1:
+            start = generate_string_start(molecule["reactants"],
+                                          molecule["products"][0],
+                                          OpenBabelNN())
+            reactants = start["reactants"]
+            products = start["products"]
+        else:
+            # Make sure molecules are sufficiently separated
+            reactants = list()
+            products = list()
+            for rct in molecule["reactants"]:
+                reactants.append(rct.get_centered_molecule())
+            for pro in molecule["products"]:
+                products.append(pro.get_centered_molecule())
 
-        rct_dist_sum = 0
-        pro_dist_sum = 0
-        for rct in reactants:
-            diameter = np.max(rct.distance_matrix)
-            if rct_dist_sum > 0:
-                rct.translate_sites(vector=np.array([rct_dist_sum + diameter + 1
-                                                     for _ in range(3)]))
-            rct_dist_sum += diameter + 1
+            rct_dist_sum = 0
+            pro_dist_sum = 0
+            for rct in reactants:
+                radius = np.max(rct.distance_matrix) / 2
+                if rct_dist_sum > 0:
+                    rct.translate_sites(vector=np.array([rct_dist_sum + radius + 0.1
+                                                         for _ in range(3)]))
+                rct_dist_sum += radius + 0.1
 
-        for pro in products:
-            diameter = np.max(pro.distance_matrix)
-            if pro_dist_sum > 0:
-                pro.translate_sites(vector=np.array([pro_dist_sum + diameter + 1
-                                                     for _ in range(3)]))
+            for pro in products:
+                radius = np.max(pro.distance_matrix) / 2
+                if pro_dist_sum > 0:
+                    pro.translate_sites(vector=np.array([pro_dist_sum + radius + 0.1
+                                                         for _ in range(3)]))
 
-            pro_dist_sum += diameter + 1
+                pro_dist_sum += radius + 0.1
 
         total_charge = int(sum([mol.charge for mol in products]))
         if len(products) == 1:
