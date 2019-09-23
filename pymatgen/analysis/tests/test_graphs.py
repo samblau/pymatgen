@@ -806,6 +806,50 @@ class MoleculeGraphTest(unittest.TestCase):
         self.assertEqual(eth_copy.graph.number_of_nodes(), 5)
         self.assertEqual(eth_copy.graph.number_of_edges(), 2)
 
+    @unittest.skipIf(not nx, "NetworkX not present. Skipping... ")
+    def test_get_disconnected(self):
+        disconnected = Molecule(["C", "H", "H", "H", "H", "He"],
+            [
+                [0.0000, 0.0000, 0.0000],
+                [-0.3633, -0.5138, -0.8900],
+                [1.0900, 0.0000, 0.0000],
+                [-0.3633, 1.0277, 0.0000],
+                [-0.3633, -0.5138, -0.8900],
+                [5.0000, 5.0000, 5.0000]
+            ],
+        )
+
+        no_he = Molecule(["C", "H", "H", "H", "H"],
+            [
+                [0.0000, 0.0000, 0.0000],
+                [-0.3633, -0.5138, -0.8900],
+                [1.0900, 0.0000, 0.0000],
+                [-0.3633, 1.0277, 0.0000],
+                [-0.3633, -0.5138, -0.8900]
+            ]
+        )
+
+        just_he = Molecule(["He"], [[5.0000, 5.0000, 5.0000]])
+
+        dis_mg = MoleculeGraph.with_empty_graph(disconnected)
+        dis_mg.add_edge(0, 1)
+        dis_mg.add_edge(0, 2)
+        dis_mg.add_edge(0, 3)
+        dis_mg.add_edge(0, 4)
+
+        fragments = dis_mg.get_disconnected_fragments()
+        self.assertEqual(len(fragments), 2)
+        self.assertEqual(fragments[0].molecule, no_he)
+        self.assertEqual(fragments[1].molecule, just_he)
+
+        con_mg = MoleculeGraph.with_empty_graph(no_he)
+        con_mg.add_edge(0, 1)
+        con_mg.add_edge(0, 2)
+        con_mg.add_edge(0, 3)
+        con_mg.add_edge(0, 4)
+        fragments = con_mg.get_disconnected_fragments()
+        self.assertEqual(len(fragments), 1)
+
     @unittest.skipIf(not nx, "NetworkX not present. Skipping...")
     def test_split(self):
         bonds = [(0, 1), (4, 5)]
@@ -932,16 +976,6 @@ class MoleculeGraphTest(unittest.TestCase):
         # switch carbons
         ethylene[0], ethylene[1] = ethylene[1], ethylene[0]
 
-        eth_copy = MoleculeGraph.with_edges(
-            ethylene,
-            {
-                (0, 1): {"weight": 2},
-                (1, 2): {"weight": 1},
-                (1, 3): {"weight": 1},
-                (0, 4): {"weight": 1},
-                (0, 5): {"weight": 1},
-            },
-        )
         # If they are equal, they must also be isomorphic
         eth_copy = copy.deepcopy(self.ethylene)
         self.assertTrue(self.ethylene.isomorphic_to(eth_copy))

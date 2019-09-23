@@ -4,7 +4,7 @@
 
 import unittest
 import random
-from pymatgen.util.num import abs_cap, min_max_indexes, round_to_sigfigs
+from pymatgen.util.num import abs_cap, min_max_indexes, round_to_sigfigs, product
 
 __author__ = 'Shyue Ping Ong'
 __copyright__ = 'Copyright 2013, The Materials Project'
@@ -52,6 +52,12 @@ class FuncTestCase(unittest.TestCase):
             round_to_sigfigs(3.5, -2)
         with self.assertRaises(TypeError):
             round_to_sigfigs(3.5, 3.5)
+
+    def test_product(self):
+        basic = [e for e in range(1, 11)]
+        self.assertEqual(product(basic), 3628800)
+        self.assertEqual(product([1] * 10), 1)
+        self.assertEqual(product([0, 1, 2]), 0)
 
 
 if __name__ == '__main__':
