@@ -372,7 +372,7 @@ def map_atoms_reaction(reactants, product):
     return mapping
 
 
-def orient_molecule(mol_1, mol_2):
+def orient_molecule(mol_1, mol_2, rotate=True):
     """
     Determine the translation vector that minimizes the distances between
     corresponding atoms in two (isomorphic) molecules.
@@ -387,12 +387,13 @@ def orient_molecule(mol_1, mol_2):
         copy_2 = copy.deepcopy(mol_2)
         # Get distance between atom n in mol_1 and mol_2 after transformation
         trans = vec[:3]
-        rot = vec[3:]
+        if rotate:
+            rot = vec[3:]
 
-        for index, vec in enumerate([[1, 0, 0], [0, 1, 0], [0, 0, 1]]):
-            copy_2.molecule.rotate_sites(theta=rot[index],
-                                         axis=vec,
-                                         anchor=copy_2.molecule.center_of_mass)
+            for index, vec in enumerate([[1, 0, 0], [0, 1, 0], [0, 0, 1]]):
+                copy_2.molecule.rotate_sites(theta=rot[index],
+                                             axis=vec,
+                                             anchor=copy_2.molecule.center_of_mass)
 
         coord_n = copy_2.molecule.cart_coords[n] + trans
 
@@ -405,7 +406,11 @@ def orient_molecule(mol_1, mol_2):
         raise ValueError("Function coorient should only be used on isomorphic "
                          "MoleculeGraphs!")
 
-    return leastsq(all_dists, np.zeros(6))[0]
+    if rotate:
+        num_vars = 6
+    else:
+        num_vars = 3
+    return leastsq(all_dists, np.zeros(num_vars))[0]
 
 
 def generate_string_start(reactants, product, strategy, reorder=False,
@@ -483,16 +488,12 @@ def generate_string_start(reactants, product, strategy, reorder=False,
                                                        reorder=reorder,
                                                        extend_structure=extend_structure)
 
-    # print(all_rct_mg)
-    # print(pro_mg)
     # break bonds to get reactants from product
     diff_graph = nx.difference(pro_mg.graph, all_rct_mg.graph)
-    # print(diff_graph.edges())
     for bond in diff_graph.edges():
         pro_mg.break_edge(bond[0], bond[1], allow_reverse=True)
 
     frags = pro_mg.get_disconnected_fragments()
-    # print(frags)
 
     coms = dict()
     for e, frag in enumerate(frags):
@@ -517,17 +518,30 @@ def generate_string_start(reactants, product, strategy, reorder=False,
         for r, rct_mg in enumerate(rct_mgs):
             if frag.isomorphic_to(rct_mg) and r not in frag_rct_map.values():
                 frag_rct_map[f] = r
-                orient_vec = orient_molecule(frag, rct_mg)
-                trans = orient_vec[0:3]
-                rot = orient_vec[3:]
-                for index, vec in enumerate([[1, 0, 0], [0, 1, 0], [0, 0, 1]]):
-                    rct_mg.molecule.rotate_sites(theta=rot[index],
-                                                 axis=vec,
-                                                 anchor=rct_mg.molecule.center_of_mass)
-                rct_mg.molecule.translate_sites(vector=trans)
-                rct_mg.set_node_attributes()
+                # Cannot optimize with 6 parameters (3 translational, 3 rotational)
+                # if there are less than 6 atoms
+                if len(rct_mg.molecule) >= 6:
+                    orient_vec = orient_molecule(frag, rct_mg, rotate=True)
+                    trans = orient_vec[0:3]
+                    rot = orient_vec[3:]
+                    for index, vec in enumerate([[1, 0, 0], [0, 1, 0], [0, 0, 1]]):
+                        rct_mg.molecule.rotate_sites(theta=rot[index],
+                                                     axis=vec,
+                                                     anchor=rct_mg.molecule.center_of_mass)
+                    rct_mg.molecule.translate_sites(vector=trans)
+                    rct_mg.set_node_attributes()
+
+                # Cannot optimize with 3 parameters (translational)
+                # if there are less than 3 atoms
+                elif len(rct_mg.molecule) >= 3:
+                    orient_vec = orient_molecule(frag, rct_mg, rotate=False)
+                    rct_mg.molecule.translate_sites(vector=orient_vec)
+                    rct_mg.set_node_attributes()
+
+                else:
+                    break
+
                 break
-    # print(frag_rct_map)
 
     # apply separation vectors to reactants
     # reactants are now in right place
