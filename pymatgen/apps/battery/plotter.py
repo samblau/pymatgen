@@ -17,19 +17,21 @@ __date__ = "Jul 12, 2012"
 
 
 from collections import OrderedDict
+
 from pymatgen.util.plotting import pretty_plot
 
 
 class VoltageProfilePlotter:
     """
     A plotter to make voltage profile plots for batteries.
-
-    Args:
-        xaxis: The quantity to use as the xaxis. Can be either capacity (the
-            default), or the frac_x.
     """
 
     def __init__(self, xaxis="capacity"):
+        """
+        Args:
+            xaxis: The quantity to use as the xaxis. Can be either capacity (the
+                default), or the frac_x.
+        """
         self._electrodes = OrderedDict()
         self.xaxis = xaxis
 
@@ -48,6 +50,13 @@ class VoltageProfilePlotter:
         self._electrodes[label] = electrode
 
     def get_plot_data(self, electrode):
+        """
+        Args:
+            electrode (): Electrode object
+
+        Returns:
+            Plot data in x, y.
+        """
         x = []
         y = []
         cap = 0
@@ -60,8 +69,7 @@ class VoltageProfilePlotter:
                 x.append(cap)
             else:
                 x.append(vpair.frac_charge / (1 - vpair.frac_charge) / norm)
-                x.append(vpair.frac_discharge / (1 - vpair.frac_discharge)
-                         / norm)
+                x.append(vpair.frac_discharge / (1 - vpair.frac_discharge) / norm)
             y.extend([vpair.voltage] * 2)
 
         x.append(x[-1])
@@ -82,14 +90,14 @@ class VoltageProfilePlotter:
         plt = pretty_plot(width, height)
         for label, electrode in self._electrodes.items():
             (x, y) = self.get_plot_data(electrode)
-            plt.plot(x, y, '-', linewidth=2, label=label)
+            plt.plot(x, y, "-", linewidth=2, label=label)
 
         plt.legend()
         if self.xaxis == "capacity":
-            plt.xlabel('Capacity (mAh/g)')
+            plt.xlabel("Capacity (mAh/g)")
         else:
-            plt.xlabel('Fraction')
-        plt.ylabel('Voltage (V)')
+            plt.xlabel("Fraction")
+        plt.ylabel("Voltage (V)")
         plt.tight_layout()
         return plt
 

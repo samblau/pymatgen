@@ -3,24 +3,27 @@
 # Distributed under the terms of the MIT License.
 
 
-import unittest
-import os
 import copy
+import os
+import unittest
 
 from monty.serialization import loadfn  # , dumpfn
 
-from pymatgen.command_line.critic2_caller import Critic2Output
-from pymatgen.core.structure import Molecule, Structure, FunctionalGroups, Site
 from pymatgen.analysis.graphs import *
 from pymatgen.analysis.local_env import (
+    CovalentBondNN,
+    CutOffDictNN,
     MinimumDistanceNN,
     MinimumOKeeffeNN,
     OpenBabelNN,
-    CutOffDictNN,
+    VoronoiNN,
 )
+from pymatgen.command_line.critic2_caller import Critic2Analysis
+from pymatgen.core.structure import FunctionalGroups, Molecule, Site, Structure
 from pymatgen.util.testing import PymatgenTest
+
 try:
-    import openbabel as ob
+    from openbabel import openbabel as ob
 except ImportError:
     ob = None
 try:
@@ -109,10 +112,8 @@ class StructureGraphTest(PymatgenTest):
                 "test_files/critic2/MoS2.cif",
             )
         )
-        c2o = Critic2Output(self.structure, reference_stdout)
-        self.mos2_sg = c2o.structure_graph(
-            edge_weight="bond_length", edge_weight_units="Å"
-        )
+        c2o = Critic2Analysis(self.structure, reference_stdout)
+        self.mos2_sg = c2o.structure_graph(include_critical_points=False)
 
         latt = Lattice.cubic(4.17)
         species = ["Ni", "O"]
@@ -130,6 +131,11 @@ class StructureGraphTest(PymatgenTest):
 
     def tearDown(self):
         warnings.simplefilter("default")
+
+    def test_inappropriate_construction(self):
+        # Check inappropriate strategy
+        with self.assertRaises(ValueError):
+            StructureGraph.with_local_env_strategy(self.NiO, CovalentBondNN())
 
     def test_properties(self):
 
@@ -232,9 +238,12 @@ class StructureGraphTest(PymatgenTest):
         self.assertEqual(square_copy.get_coordination_of_site(1), 1)
 
         # Test that StructureGraph.graph is correctly updated
-        square_copy.insert_node(1, "H", [0.5, 0.5, 0.75], edges=[{"from_index": 1,
-                                                                  "to_index": 2,
-                                                                  "to_jimage": (0, 0, 0)}])
+        square_copy.insert_node(
+            1,
+            "H",
+            [0.5, 0.5, 0.75],
+            edges=[{"from_index": 1, "to_index": 2, "to_jimage": (0, 0, 0)}],
+        )
         square_copy.remove_nodes([1])
         self.assertEqual(square_copy.graph.number_of_nodes(), 2)
         self.assertEqual(square_copy.graph.number_of_edges(), 5)
@@ -694,13 +703,13 @@ class MoleculeGraphTest(unittest.TestCase):
         self.assertEqual(mol_graph.graph.adj, ref_mol_graph.graph.adj)
         for node in mol_graph.graph.nodes:
             self.assertEqual(
-                mol_graph.graph.node[node]["specie"],
-                ref_mol_graph.graph.node[node]["specie"],
+                mol_graph.graph.nodes[node]["specie"],
+                ref_mol_graph.graph.nodes[node]["specie"],
             )
             for ii in range(3):
                 self.assertEqual(
-                    mol_graph.graph.node[node]["coords"][ii],
-                    ref_mol_graph.graph.node[node]["coords"][ii],
+                    mol_graph.graph.nodes[node]["coords"][ii],
+                    ref_mol_graph.graph.nodes[node]["coords"][ii],
                 )
 
         edges_pc = {(e[0], e[1]): {"weight": 1.0} for e in self.pc_edges}
@@ -711,20 +720,23 @@ class MoleculeGraphTest(unittest.TestCase):
         self.assertEqual(mol_graph.graph.adj, ref_mol_graph.graph.adj)
         for node in mol_graph.graph:
             self.assertEqual(
-                mol_graph.graph.node[node]["specie"],
-                ref_mol_graph.graph.node[node]["specie"],
+                mol_graph.graph.nodes[node]["specie"],
+                ref_mol_graph.graph.nodes[node]["specie"],
             )
             for ii in range(3):
                 self.assertEqual(
-                    mol_graph.graph.node[node]["coords"][ii],
-                    ref_mol_graph.graph.node[node]["coords"][ii],
+                    mol_graph.graph.nodes[node]["coords"][ii],
+                    ref_mol_graph.graph.nodes[node]["coords"][ii],
                 )
 
         mol_graph_edges = MoleculeGraph.with_edges(self.pc, edges=edges_pc)
-        mol_graph_strat = MoleculeGraph.with_local_env_strategy(
-            self.pc, OpenBabelNN(), reorder=False, extend_structure=False
-        )
+        mol_graph_strat = MoleculeGraph.with_local_env_strategy(self.pc, OpenBabelNN())
+
         self.assertTrue(mol_graph_edges.isomorphic_to(mol_graph_strat))
+
+        # Check inappropriate strategy
+        with self.assertRaises(ValueError):
+            MoleculeGraph.with_local_env_strategy(self.pc, VoronoiNN())
 
     def test_properties(self):
         self.assertEqual(self.cyclohexene.name, "bonds")

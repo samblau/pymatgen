@@ -2,13 +2,17 @@
 # Copyright (c) Pymatgen Development Team.
 # Distributed under the terms of the MIT License.
 
+"""
+Input sets for Qchem
+"""
+
 import logging
 import os
+
 from monty.io import zopen
+
 from pymatgen.io.qchem.inputs import QCInput
 from pymatgen.io.qchem.utils import lower_and_check_unique
-
-# Classes for reading/manipulating/writing QChem output files.
 
 __author__ = "Samuel Blau, Brandon Wood, Shyam Dwaraknath"
 __copyright__ = "Copyright 2018, The Materials Project"
@@ -22,18 +26,20 @@ class QChemDictSet(QCInput):
     Build a QCInput given all the various input parameters. Can be extended by standard implementations below.
     """
 
-    def __init__(self,
-                 molecule,
-                 job_type,
-                 basis_set,
-                 scf_algorithm,
-                 dft_rung=4,
-                 pcm_dielectric=None,
-                 smd_solvent=None,
-                 custom_smd=None,
-                 max_scf_cycles=200,
-                 geom_opt_max_cycles=200,
-                 overwrite_inputs=None):
+    def __init__(
+        self,
+        molecule,
+        job_type,
+        basis_set,
+        scf_algorithm,
+        dft_rung=4,
+        pcm_dielectric=None,
+        smd_solvent=None,
+        custom_smd=None,
+        max_scf_cycles=200,
+        geom_opt_max_cycles=200,
+        overwrite_inputs=None,
+    ):
         """
         Args:
             molecule (Pymatgen molecule object)
@@ -44,6 +50,7 @@ class QChemDictSet(QCInput):
             pcm_dielectric (str)
             max_scf_cycles (int)
             geom_opt_max_cycles (int)
+            plot_cubes (bool)
             overwrite_inputs (dict): This is dictionary of QChem input sections to add or overwrite variables,
             the available sections are currently rem, pcm, and solvent. So the accepted keys are rem, pcm, or solvent
             and the value is a dictionary of key value pairs relevant to the section. An example would be adding a
@@ -62,6 +69,7 @@ class QChemDictSet(QCInput):
         self.custom_smd = custom_smd
         self.max_scf_cycles = max_scf_cycles
         self.geom_opt_max_cycles = geom_opt_max_cycles
+        self.plot_cubes = plot_cubes
         self.overwrite_inputs = overwrite_inputs
 
         pcm_defaults = {
@@ -69,12 +77,18 @@ class QChemDictSet(QCInput):
             "hpoints": "194",
             "radii": "uff",
             "theory": "cpcm",
-            "vdwscale": "1.1"
+            "vdwscale": "1.1",
+        }
+
+        plots_defaults = {
+            "grid_spacing": "0.05",
+            "total_density": "0"
         }
 
         mypcm = {}
         mysolvent = {}
         mysmx = {}
+        myplots = {}
         myrem = {}
         myrem["job_type"] = job_type
         myrem["basis"] = self.basis_set
@@ -109,7 +123,7 @@ class QChemDictSet(QCInput):
         if self.pcm_dielectric is not None:
             mypcm = pcm_defaults
             mysolvent["dielectric"] = self.pcm_dielectric
-            myrem["solvent_method"] = 'pcm'
+            myrem["solvent_method"] = "pcm"
 
         if self.smd_solvent is not None:
             if self.smd_solvent == "custom":
@@ -121,10 +135,16 @@ class QChemDictSet(QCInput):
             if self.smd_solvent == "custom" or self.smd_solvent == "other":
                 if self.custom_smd is None:
                     raise ValueError(
-                        'A user-defined SMD requires passing custom_smd, a string' +
-                        ' of seven comma separated values in the following order:' +
-                        ' dielectric, refractive index, acidity, basicity, surface' +
-                        ' tension, aromaticity, electronegative halogenicity')
+                        "A user-defined SMD requires passing custom_smd, a string"
+                        + " of seven comma separated values in the following order:"
+                        + " dielectric, refractive index, acidity, basicity, surface"
+                        + " tension, aromaticity, electronegative halogenicity"
+                    )
+
+        if self.plot_cubes:
+            myplots = plots_defaults
+            myrem["plots"] = "true"
+            myrem["make_cube_files"] = "true"
 
         if self.overwrite_inputs:
             for sec, sec_dict in self.overwrite_inputs.items():
@@ -144,14 +164,24 @@ class QChemDictSet(QCInput):
                     temp_smx = lower_and_check_unique(sec_dict)
                     for k, v in temp_smx.items():
                         mysmx[k] = v
+                if sec == "plots":
+                    tmp_plots = lower_and_check_unique(sec_dict)
+                    for k, v in temp_plots.items():
+                        myplots[k] = v
 
         super().__init__(
-            self.molecule, rem=myrem, pcm=mypcm, solvent=mysolvent, smx=mysmx)
+            self.molecule, rem=myrem, pcm=mypcm, solvent=mysolvent, smx=mysmx, plots=myplots)
 
     def write(self, input_file):
+        """
+        Args:
+            input_file (str): Filename
+        """
         self.write_file(input_file)
         if self.smd_solvent == "custom" or self.smd_solvent == "other":
-            with zopen(os.path.join(os.path.dirname(input_file), "solvent_data"), 'wt') as f:
+            with zopen(
+                os.path.join(os.path.dirname(input_file), "solvent_data"), "wt"
+            ) as f:
                 f.write(self.custom_smd)
 
 
@@ -170,7 +200,21 @@ class OptSet(QChemDictSet):
                  scf_algorithm="diis",
                  max_scf_cycles=200,
                  geom_opt_max_cycles=200,
+                 plot_cubes=False,
                  overwrite_inputs=None):
+        """
+        Args:
+            molecule ():
+            dft_rung ():
+            basis_set ():
+            pcm_dielectric ():
+            smd_solvent ():
+            custom_smd ():
+            scf_algorithm ():
+            max_scf_cycles ():
+            geom_opt_max_cycles ():
+            overwrite_inputs ():
+        """
         self.basis_set = basis_set
         self.scf_algorithm = scf_algorithm
         self.max_scf_cycles = max_scf_cycles
@@ -186,6 +230,7 @@ class OptSet(QChemDictSet):
             scf_algorithm=self.scf_algorithm,
             max_scf_cycles=self.max_scf_cycles,
             geom_opt_max_cycles=self.geom_opt_max_cycles,
+            plot_cubes=plot_cubes,
             overwrite_inputs=overwrite_inputs)
 
 
@@ -203,7 +248,21 @@ class SinglePointSet(QChemDictSet):
                  custom_smd=None,
                  scf_algorithm="diis",
                  max_scf_cycles=200,
+                 plot_cubes=False,
                  overwrite_inputs=None):
+        """
+
+        Args:
+            molecule ():
+            dft_rung ():
+            basis_set ():
+            pcm_dielectric ():
+            smd_solvent ():
+            custom_smd ():
+            scf_algorithm ():
+            max_scf_cycles ():
+            overwrite_inputs ():
+        """
         self.basis_set = basis_set
         self.scf_algorithm = scf_algorithm
         self.max_scf_cycles = max_scf_cycles
@@ -217,12 +276,13 @@ class SinglePointSet(QChemDictSet):
             basis_set=self.basis_set,
             scf_algorithm=self.scf_algorithm,
             max_scf_cycles=self.max_scf_cycles,
+            plot_cubes=plot_cubes,
             overwrite_inputs=overwrite_inputs)
 
 
 class FreqSet(QChemDictSet):
     """
-    QChemDictSet for a single point calculation
+    QChemDictSet for a frequency calculation
     """
 
     def __init__(self,
@@ -234,7 +294,20 @@ class FreqSet(QChemDictSet):
                  custom_smd=None,
                  scf_algorithm="diis",
                  max_scf_cycles=200,
+                 plot_cubes=False,
                  overwrite_inputs=None):
+        """
+        Args:
+            molecule ():
+            dft_rung ():
+            basis_set ():
+            pcm_dielectric ():
+            smd_solvent ():
+            custom_smd ():
+            scf_algorithm ():
+            max_scf_cycles ():
+            overwrite_inputs ():
+        """
         self.basis_set = basis_set
         self.scf_algorithm = scf_algorithm
         self.max_scf_cycles = max_scf_cycles
@@ -248,4 +321,5 @@ class FreqSet(QChemDictSet):
             basis_set=self.basis_set,
             scf_algorithm=self.scf_algorithm,
             max_scf_cycles=self.max_scf_cycles,
+            plot_cubes=plot_cubes,
             overwrite_inputs=overwrite_inputs)

@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
 import unittest
+
 import numpy as np
+
 from pymatgen.core.lattice import Lattice
-from pymatgen.symmetry.maggroups import MagneticSpaceGroup
 from pymatgen.symmetry.groups import SpaceGroup
+from pymatgen.symmetry.maggroups import MagneticSpaceGroup
 from pymatgen.util.testing import PymatgenTest
 
 __author__ = "Matthew Horton"
@@ -17,11 +19,11 @@ __date__ = "Feb 2017"
 
 
 class MagneticSpaceGroupTest(PymatgenTest):
-
     def setUp(self):
         self.msg_1 = MagneticSpaceGroup([70, 530])
         self.msg_2 = MagneticSpaceGroup([62, 448])
         self.msg_3 = MagneticSpaceGroup([20, 37])
+        self.msg_4 = MagneticSpaceGroup([2, 7], "c,1/4a+1/4b,-1/2a+1/2b;0,0,0")
 
     def test_init(self):
         # test init with the following space group:
@@ -133,11 +135,18 @@ x+1/2, y+1/2, z, +1
 x+1/2, -y+1/2, -z, +1
 -x+1/2, y+1/2, -z+1/2, +1
 -x+1/2, -y+1/2, z+1/2, +1
-x+1/2, y+1, z+1/2, -1
-x+1, -y+1/2, -z+1/2, -1
--x+1, y+1/2, -z, -1
--x+1, -y+1/2, z, -1"""
+x+1/2, y, z+1/2, -1
+x, -y+1/2, -z+1/2, -1
+-x, y+1/2, -z, -1
+-x, -y+1/2, z, -1"""
         self.assertEqual(msg_3_symmops, msg_3_symmops_ref)
+
+        msg_4_symmops = "\n".join([str(op) for op in self.msg_4.symmetry_ops])
+        msg_4_symmops_ref = """x, y, z, +1
+-x, -y, -z, +1
+x+1/2, y, z, -1
+-x+1/2, -y, -z, -1"""
+        self.assertEqual(msg_4_symmops, msg_4_symmops_ref)
 
     def test_equivalence_to_spacegroup(self):
 
@@ -146,9 +155,7 @@ x+1, -y+1/2, -z+1/2, -1
 
         labels = ["Fm-3m", "Pnma", "P2/c", "P-1"]
 
-        points = [[0, 0, 0],
-                  [0.5, 0, 0],
-                  [0.11, 0.22, 0.33]]
+        points = [[0, 0, 0], [0.5, 0, 0], [0.11, 0.22, 0.33]]
 
         for label in labels:
             sg = SpaceGroup(label)
@@ -156,8 +163,12 @@ x+1, -y+1/2, -z+1/2, -1
             self.assertEqual(sg.crystal_system, msg.crystal_system)
             for p in points:
                 pp_sg = np.array(sg.get_orbit(p))
-                pp_msg = np.array(msg.get_orbit(p, 0)[0])  # discarding magnetic moment information
-                pp_sg = pp_sg[np.lexsort(np.transpose(pp_sg)[::-1])]  # sorting arrays so we can compare them
+                pp_msg = np.array(
+                    msg.get_orbit(p, 0)[0]
+                )  # discarding magnetic moment information
+                pp_sg = pp_sg[
+                    np.lexsort(np.transpose(pp_sg)[::-1])
+                ]  # sorting arrays so we can compare them
                 pp_msg = pp_msg[np.lexsort(np.transpose(pp_msg)[::-1])]
                 self.assertTrue(np.allclose(pp_sg, pp_msg))
 
@@ -199,5 +210,5 @@ Wyckoff Positions (OG): (1,0,0)+ (0,2,0)+ (0,0,1)+
         self.assertStrContentEqual(msg.data_str(), ref_string_all)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
