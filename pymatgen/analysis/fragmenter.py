@@ -13,6 +13,7 @@ from monty.json import MSONable
 from pymatgen.analysis.graphs import MoleculeGraph, MolGraphSplitError
 from pymatgen.analysis.local_env import OpenBabelNN
 from pymatgen.io.babel import BabelMolAdaptor
+import logging
 
 try:
     from graphdot.experimental.metric.m3 import M3

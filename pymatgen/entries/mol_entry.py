@@ -77,15 +77,11 @@ class MoleculeEntry(MSONable):
                     self.mol_graph = MoleculeGraph.from_dict(self.mol_doc["mol_graph"])
             else:
                 mol_graph = MoleculeGraph.with_local_env_strategy(self.molecule,
-                                                                  OpenBabelNN(),
-                                                                  reorder=False,
-                                                                  extend_structure=False)
+                                                                  OpenBabelNN())
                 self.mol_graph = metal_edge_extender(mol_graph)
         else:
             mol_graph = MoleculeGraph.with_local_env_strategy(self.molecule,
-                                                              OpenBabelNN(),
-                                                              reorder=False,
-                                                              extend_structure=False)
+                                                              OpenBabelNN())
             self.mol_graph = metal_edge_extender(mol_graph)
 
     @property
